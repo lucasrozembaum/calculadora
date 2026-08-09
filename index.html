@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Calculadora Rural</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#10b981" />
+  </head>
+  <body>
+    <!-- PANTALLA DE ACTIVACIÓN CON PIN -->
+    <div id="activationScreen" class="lock-overlay">
+      <div class="lock-card">
+        <h2>Activación de App</h2>
+        <p>Ingresá el PIN de activación para habilitar esta aplicación:</p>
+        <input
+          type="password"
+          id="accessPin"
+          placeholder="Ej: 1234"
+          maxlength="8"
+        />
+        <button id="activateBtn" type="button">Activar Aplicación</button>
+        <p id="activationError" class="error-msg hidden">PIN incorrecto.</p>
+      </div>
+    </div>
+
+    <!-- APLICACIÓN PRINCIPAL -->
+    <div class="calculator-container">
+      <div class="header-bar">
+        <div class="brand-container">
+          <img
+            src="logo.png"
+            alt="Logo Delegación"
+            class="delegacion-logo"
+            onerror="this.style.display = 'none'"
+          />
+          <div>
+            <h2>Calculadora de Indemnizaciones Rurales</h2>
+            <span class="sub-title">Delegación Córdoba Capital</span>
+          </div>
+        </div>
+        <button id="reportBtn" type="button" class="btn-secondary">
+          📊 Uso Mensual
+        </button>
+      </div>
+
+      <form id="calcForm">
+        <div class="form-group">
+          <label for="salary">Mejor Remuneración Mensual ($):</label>
+          <input type="number" id="salary" placeholder="Ej: 650000" required />
+        </div>
+
+        <div class="form-group">
+          <label for="startDate">Fecha de Ingreso:</label>
+          <input type="date" id="startDate" required />
+        </div>
+
+        <div class="form-group">
+          <label for="endDate">Fecha de Egreso:</label>
+          <input type="date" id="endDate" required />
+        </div>
+
+        <div class="form-group">
+          <label for="notice">¿Recibió Preaviso?</label>
+          <select id="notice">
+            <option value="no">No</option>
+            <option value="si">Sí</option>
+          </select>
+        </div>
+
+        <button type="submit" id="submitBtn">Calcular Liquidación</button>
+      </form>
+
+      <div id="results" class="results-card hidden">
+        <h3>Resumen de Liquidación</h3>
+        <div class="table-responsive">
+          <table id="resultsTable">
+            <thead>
+              <tr>
+                <th>Concepto</th>
+                <th>Monto ($)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="total-box">
+          <strong>Total Estimado: $<span id="totalAmount">0.00</span></strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL DE REPORTE DE USO -->
+    <div id="reportModal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h3>Estadísticas de Uso Mensual</h3>
+        <ul id="usageList" class="usage-list"></ul>
+        <button id="closeReportBtn" type="button" class="btn-secondary">
+          Cerrar
+        </button>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
