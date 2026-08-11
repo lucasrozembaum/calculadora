@@ -1,254 +1,360 @@
-// ==========================================
-// 1. CONFIGURACIÓN DE FIREBASE (NUBE)
-// ==========================================
-// Nota: Cuando tengas las claves reales de Firebase, ponelas acá.
-// Mientras tanto, la app funcionará 100% de manera local sin trabarse.
-const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "TU_PROYECTO.firebaseapp.com",
-  projectId: "TU_PROYECTO_ID",
-  storageBucket: "TU_PROYECTO.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef",
-};
+/**
+ * Calculadora de Indemnizaciones Rurales - Ley 26.727 & LCT
+ * Delegación Regional UATRE
+ */
 
-let db = null;
-// Solo inicializa Firebase si no tiene los datos por defecto
-if (typeof firebase !== "undefined" && firebaseConfig.apiKey !== "TU_API_KEY") {
-  try {
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.firestore();
-  } catch (e) {
-    console.warn(
-      "Firebase no está configurado aún. La app funcionará en modo local.",
-    );
+// 🔑 CLAVE DE ACTIVACIÓN DE LA APP
+const ACTIVATION_PIN = "delegacioncordoba";
+
+document.addEventListener("DOMContentLoaded", () => {
+  checkActivation();
+
+  const activateBtn = document.getElementById("activateBtn");
+  if (activateBtn) {
+    activateBtn.addEventListener("click", validarPin);
   }
-}
 
-// Identificador único de este celular
-let deviceId = localStorage.getItem("app_device_id");
-if (!deviceId) {
-  deviceId = "CEL-" + Math.floor(1000 + Math.random() * 9000);
-  localStorage.setItem("app_device_id", deviceId);
-}
-
-// ==========================================
-// 2. CONTROL DE ACTIVACIÓN INICIAL (PIN)
-// ==========================================
-const PIN_ACTIVACION = "1234"; // PIN de activación inicial
-
-window.addEventListener("DOMContentLoaded", () => {
-  const isActivated = localStorage.getItem("app_is_activated");
-  if (isActivated === "true") {
-    const activationScreen = document.getElementById("activationScreen");
-    if (activationScreen) activationScreen.classList.add("hidden");
-  }
-});
-
-document.getElementById("activateBtn")?.addEventListener("click", function () {
-  const pinInput = document.getElementById("accessPin").value;
-  const errorMsg = document.getElementById("activationError");
-
-  if (pinInput === PIN_ACTIVACION) {
-    localStorage.setItem("app_is_activated", "true");
-    document.getElementById("activationScreen").classList.add("hidden");
-
-    // Guardar en la nube solo si está disponible
-    if (db && navigator.onLine) {
-      db.collection("dispositivos_activados")
-        .doc(deviceId)
-        .set({
-          fechaActivacion: new Date(),
-          modeloDispositivo: navigator.userAgent,
-        })
-        .catch((err) => console.error("Error Firebase:", err));
-    }
-  } else {
-    if (errorMsg) errorMsg.classList.remove("hidden");
-  }
-});
-
-// ==========================================
-// 3. REGISTRO Y REPORTE DE USO MENSUAL
-// ==========================================
-function registrarUso(montoTotal) {
-  const hoy = new Date();
-  const mesClave = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
-
-  const registro = {
-    dispositivo: deviceId,
-    fecha: hoy.toISOString(),
-    mesAnio: mesClave,
-    montoTotalCalculado: montoTotal,
-  };
-
-  // 1. Guardar siempre en la memoria del celular
-  let historial = JSON.parse(localStorage.getItem("calc_usage_history")) || {};
-  historial[mesClave] = (historial[mesClave] || 0) + 1;
-  localStorage.setItem("calc_usage_history", JSON.stringify(historial));
-
-  // 2. Intentar guardar en la Nube solo si está lista
-  if (db && navigator.onLine) {
-    db.collection("usos_calculadora")
-      .add(registro)
-      .then(() => console.log("Sincronizado con la nube"))
-      .catch((err) => console.error("Error al sincronizar:", err));
-  }
-}
-
-// Ver informe de uso mensual
-document.getElementById("reportBtn")?.addEventListener("click", function () {
-  const historial =
-    JSON.parse(localStorage.getItem("calc_usage_history")) || {};
-  const usageList = document.getElementById("usageList");
-  if (!usageList) return;
-
-  usageList.innerHTML = "";
-  const meses = Object.keys(historial).sort().reverse();
-
-  if (meses.length === 0) {
-    usageList.innerHTML = "<li>No hay registros de uso en este celular.</li>";
-  } else {
-    meses.forEach((mes) => {
-      const [anio, m] = mes.split("-");
-      const fechaTexto = new Date(anio, m - 1).toLocaleDateString("es-AR", {
-        month: "long",
-        year: "numeric",
-      });
-      const li = document.createElement("li");
-      li.innerHTML = `<span>${fechaTexto.toUpperCase()}:</span> <strong>${historial[mes]} cálculo(s)</strong>`;
-      usageList.appendChild(li);
+  const accessPinInput = document.getElementById("accessPin");
+  if (accessPinInput) {
+    accessPinInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") validarPin();
     });
   }
 
-  document.getElementById("reportModal").classList.remove("hidden");
+  const form = document.getElementById("calcForm");
+  if (form) {
+    form.addEventListener("submit", calcularIndemnizacion);
+  }
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker
+      .register("./sw.js")
+      .then((reg) => {
+        reg.update();
+      })
+      .catch((err) => console.log("SW error:", err));
+  }
 });
 
-document
-  .getElementById("closeReportBtn")
-  ?.addEventListener("click", function () {
-    document.getElementById("reportModal").classList.add("hidden");
-  });
+function checkActivation() {
+  const isActivated = localStorage.getItem("app_activated_v2");
+  const lockOverlay = document.getElementById("activationScreen");
 
-// ==========================================
-// 4. LÓGICA DE CÁLCULO DE INDEMNIZACIÓN
-// ==========================================
-document.getElementById("calcForm").addEventListener("submit", function (e) {
+  if (isActivated === "true" && lockOverlay) {
+    lockOverlay.classList.add("hidden");
+  } else if (lockOverlay) {
+    lockOverlay.classList.remove("hidden");
+  }
+}
+
+function validarPin() {
+  const inputPin = document
+    .getElementById("accessPin")
+    .value.trim()
+    .toLowerCase();
+  const lockOverlay = document.getElementById("activationScreen");
+  const errorMsg = document.getElementById("activationError");
+
+  if (inputPin === ACTIVATION_PIN) {
+    localStorage.setItem("app_activated_v2", "true");
+    if (errorMsg) errorMsg.classList.add("hidden");
+    if (lockOverlay) lockOverlay.classList.add("hidden");
+  } else {
+    if (errorMsg) {
+      errorMsg.classList.remove("hidden");
+      errorMsg.textContent = "Contraseña incorrecta. Intente nuevamente.";
+    }
+  }
+}
+
+function calcularIndemnizacion(e) {
   e.preventDefault();
 
-  const salary = parseFloat(document.getElementById("salary").value);
-  const startDate = new Date(document.getElementById("startDate").value);
-  const endDate = new Date(document.getElementById("endDate").value);
-  const hasNotice = document.getElementById("notice").value === "si";
+  const sueldoBase = parseFloat(document.getElementById("salary").value) || 0;
+  const fechaIngresoStr = document.getElementById("startDate").value;
+  const fechaEgresoStr = document.getElementById("endDate").value;
+  const recibioPreaviso = document.getElementById("notice").value === "si";
+  const vacationSelect = document.getElementById("vacation2025");
+  const gozoVacacionesAnioAnterior = vacationSelect
+    ? vacationSelect.value === "si"
+    : true;
 
-  if (endDate <= startDate) {
-    alert("La fecha de egreso debe ser posterior a la de ingreso.");
+  if (!fechaIngresoStr || !fechaEgresoStr || sueldoBase <= 0) {
+    alert("Por favor, ingrese fechas válidas y un sueldo base mayor a cero.");
     return;
   }
 
-  // Antigüedad (Ley 26.727 / LCT)
-  const diffTime = Math.abs(endDate - startDate);
-  const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  const fullYears = Math.floor(totalDays / 365);
-  const remainingDays = totalDays % 365;
-  const remainingMonths = Math.floor(remainingDays / 30);
+  const [fIAnio, fIMes, fIDia] = fechaIngresoStr.split("-").map(Number);
+  const [fEAnio, fEMes, fEDia] = fechaEgresoStr.split("-").map(Number);
 
-  let yearsForIndemnity = fullYears;
-  if (
-    remainingMonths > 3 ||
-    (remainingMonths === 3 && remainingDays % 30 > 0)
-  ) {
-    yearsForIndemnity += 1;
-  }
-  if (yearsForIndemnity === 0) yearsForIndemnity = 1;
+  const fechaIngreso = new Date(fIAnio, fIMes - 1, fIDia);
+  const fechaEgreso = new Date(fEAnio, fEMes - 1, fEDia);
 
-  const art245 = salary * yearsForIndemnity;
-
-  // Preaviso
-  let preaviso = 0;
-  if (!hasNotice) {
-    const preavisoMonths = fullYears >= 5 ? 2 : 1;
-    preaviso = salary * preavisoMonths;
+  if (fechaEgreso <= fechaIngreso) {
+    alert("La fecha de egreso debe ser posterior a la fecha de ingreso.");
+    return;
   }
 
-  // Integración Mes de Despido
-  const lastDayOfMonth = new Date(
-    endDate.getFullYear(),
-    endDate.getMonth() + 1,
-    0,
-  ).getDate();
-  const dayOfExit = endDate.getDate();
-  let integracion = 0;
-  if (dayOfExit !== lastDayOfMonth && !hasNotice) {
-    const remainingDaysInMonth = lastDayOfMonth - dayOfExit;
-    integracion = (salary / 30) * remainingDaysInMonth;
+  const ultimoDiaMesCalendario = new Date(fEAnio, fEMes, 0).getDate();
+  const esUltimoDiaDelMes = fEDia === ultimoDiaMesCalendario;
+  const diasTrabajadosMes = esUltimoDiaDelMes ? 30 : Math.min(fEDia, 30);
+
+  const tiempoTrabajado = calcularAntiguedad(fechaIngreso, fechaEgreso);
+  const periodos245 = calcularPeriodos245(fechaIngreso, fechaEgreso);
+
+  // 1. Indemnización por Antigüedad
+  const montoAntiguedad = sueldoBase * periodos245;
+
+  // 2. Preaviso
+  let diasPreaviso = 0;
+  if (!recibioPreaviso) {
+    diasPreaviso = tiempoTrabajado.anios < 5 ? 30 : 60;
+  }
+  const montoPreaviso = (sueldoBase / 30) * diasPreaviso;
+  const sacSobrePreaviso = montoPreaviso / 12;
+
+  // 3. Integración Mes de Despido
+  let montoIntegracion = 0;
+  let sacSobreIntegracion = 0;
+  let diasIntegracion = 0;
+
+  if (!recibioPreaviso && !esUltimoDiaDelMes) {
+    diasIntegracion = 30 - diasTrabajadosMes;
+    if (diasIntegracion > 0) {
+      montoIntegracion = (sueldoBase / 30) * diasIntegracion;
+      sacSobreIntegracion = montoIntegracion / 12;
+    }
   }
 
-  // SAC Proporcional
-  const currentMonth = endDate.getMonth();
-  const semesterStartMonth = currentMonth < 6 ? 0 : 6;
-  const semesterStartDate = new Date(
-    endDate.getFullYear(),
-    semesterStartMonth,
-    1,
+  // 4. Días trabajados del mes
+  const montoDiasMes = (sueldoBase / 30) * diasTrabajadosMes;
+
+  // 5. SAC Proporcional
+  const sacProporcional = calcularSACProporcional(fechaEgreso, sueldoBase);
+
+  // 6. Vacaciones No Gozadas Año En Curso (Proporcional)
+  const vacacionesEnCurso = calcularVacacionesNoGozadas(
+    fechaIngreso,
+    fechaEgreso,
+    sueldoBase,
   );
-  const daysInSemester =
-    Math.ceil((endDate - semesterStartDate) / (1000 * 60 * 60 * 24)) + 1;
-  const sacProporcional = (salary / 2) * (daysInSemester / 182.5);
 
-  // Vacaciones No Gozadas + SAC s/Vac
-  let vacationDaysBase = 14;
-  if (fullYears >= 5 && fullYears < 10) vacationDaysBase = 21;
-  else if (fullYears >= 10 && fullYears < 20) vacationDaysBase = 28;
-  else if (fullYears >= 20) vacationDaysBase = 35;
+  // 7. Vacaciones No Gozadas Año Anterior (Completo)
+  const vacacionesAnioAnterior = calcularVacacionesAnioAnterior(
+    fechaIngreso,
+    fechaEgreso,
+    sueldoBase,
+    gozoVacacionesAnioAnterior,
+  );
 
-  const startOfYear = new Date(endDate.getFullYear(), 0, 1);
-  const daysInYear =
-    Math.ceil((endDate - startOfYear) / (1000 * 60 * 60 * 24)) + 1;
-  const propVacationDays = (vacationDaysBase / 365) * daysInYear;
+  // Total Liquidación
+  const totalLiquidacion =
+    montoAntiguedad +
+    montoPreaviso +
+    sacSobrePreaviso +
+    montoIntegracion +
+    sacSobreIntegracion +
+    montoDiasMes +
+    sacProporcional +
+    vacacionesEnCurso.totalVacacionesYSac +
+    vacacionesAnioAnterior.totalVacacionesYSac;
 
-  const vacNoGozadas = propVacationDays * (salary / 25);
-  const sacSobreVacaciones = vacNoGozadas / 12;
+  renderizarResultados({
+    diasTrabajadosMes,
+    montoAntiguedad,
+    montoPreaviso,
+    sacSobrePreaviso,
+    montoIntegracion,
+    sacSobreIntegracion,
+    diasIntegracion,
+    montoDiasMes,
+    sacProporcional,
+    vacacionesEnCurso,
+    vacacionesAnioAnterior,
+    totalLiquidacion,
+  });
+}
 
-  // Carga de la tabla de resultados
-  const items = [
+function calcularAntiguedad(fInicio, fFin) {
+  let anios = fFin.getFullYear() - fInicio.getFullYear();
+  let meses = fFin.getMonth() - fInicio.getMonth();
+  let dias = fFin.getDate() - fInicio.getDate();
+
+  if (dias < 0) {
+    meses--;
+    const ultimoDiaMesAnterior = new Date(
+      fFin.getFullYear(),
+      fFin.getMonth(),
+      0,
+    ).getDate();
+    dias += ultimoDiaMesAnterior;
+  }
+  if (meses < 0) {
+    anios--;
+    meses += 12;
+  }
+  return { anios, meses, dias };
+}
+
+function calcularPeriodos245(fInicio, fFin) {
+  const anti = calcularAntiguedad(fInicio, fFin);
+  let periodos = anti.anios;
+  if (anti.meses > 3 || (anti.meses === 3 && anti.dias > 0)) {
+    periodos += 1;
+  }
+  return Math.max(periodos, 1);
+}
+
+function calcularSACProporcional(fEgreso, sueldoBase) {
+  const anio = fEgreso.getFullYear();
+  const mes = fEgreso.getMonth();
+
+  const inicioSemestre = mes < 6 ? new Date(anio, 0, 1) : new Date(anio, 6, 1);
+
+  const diffTiempo = fEgreso.getTime() - inicioSemestre.getTime();
+  const diasSemestre = Math.floor(diffTiempo / (1000 * 60 * 60 * 24)) + 1;
+
+  return ((sueldoBase / 2) * diasSemestre) / 182.5;
+}
+
+function calcularVacacionesNoGozadas(fIngreso, fEgreso, sueldoBase) {
+  const anti = calcularAntiguedad(fIngreso, fEgreso);
+  let diasVacacionesAnuales = 14;
+
+  if (anti.anios >= 20) diasVacacionesAnuales = 35;
+  else if (anti.anios >= 10) diasVacacionesAnuales = 28;
+  else if (anti.anios >= 5) diasVacacionesAnuales = 21;
+
+  const inicioAnio = new Date(fEgreso.getFullYear(), 0, 1);
+  const diffTiempo = fEgreso.getTime() - inicioAnio.getTime();
+  const diasTrabajadosEnAnio =
+    Math.floor(diffTiempo / (1000 * 60 * 60 * 24)) + 1;
+
+  const diasProporcionales =
+    (diasVacacionesAnuales * diasTrabajadosEnAnio) / 365;
+  const valorDiaVacaciones = sueldoBase / 25;
+  const montoVacaciones = valorDiaVacaciones * diasProporcionales;
+  const sacSobreVacaciones = montoVacaciones / 12;
+
+  return {
+    diasProporcionales: diasProporcionales.toFixed(2),
+    montoVacaciones,
+    sacSobreVacaciones,
+    totalVacacionesYSac: montoVacaciones + sacSobreVacaciones,
+  };
+}
+
+function calcularVacacionesAnioAnterior(
+  fIngreso,
+  fEgreso,
+  sueldoBase,
+  gozoVacacionesAnioAnterior,
+) {
+  if (gozoVacacionesAnioAnterior) {
+    return {
+      dias: 0,
+      montoVacaciones: 0,
+      sacSobreVacaciones: 0,
+      totalVacacionesYSac: 0,
+    };
+  }
+
+  const anioAnterior = fEgreso.getFullYear() - 1;
+  const finAnioAnterior = new Date(anioAnterior, 11, 31);
+
+  if (fIngreso > finAnioAnterior) {
+    return {
+      dias: 0,
+      montoVacaciones: 0,
+      sacSobreVacaciones: 0,
+      totalVacacionesYSac: 0,
+    };
+  }
+
+  const antiAnioAnterior = calcularAntiguedad(fIngreso, finAnioAnterior);
+  let diasVacacionesAnuales = 14;
+
+  if (antiAnioAnterior.anios >= 20) diasVacacionesAnuales = 35;
+  else if (antiAnioAnterior.anios >= 10) diasVacacionesAnuales = 28;
+  else if (antiAnioAnterior.anios >= 5) diasVacacionesAnuales = 21;
+
+  const valorDiaVacaciones = sueldoBase / 25;
+  const montoVacaciones = valorDiaVacaciones * diasVacacionesAnuales;
+  const sacSobreVacaciones = montoVacaciones / 12;
+
+  return {
+    dias: diasVacacionesAnuales,
+    montoVacaciones,
+    sacSobreVacaciones,
+    totalVacacionesYSac: montoVacaciones + sacSobreVacaciones,
+  };
+}
+
+function formatMoneda(monto) {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    minimumFractionDigits: 2,
+  }).format(monto);
+}
+
+function renderizarResultados(datos) {
+  const resultsCard = document.getElementById("results");
+  const tbody = document.querySelector("#resultsTable tbody");
+  const totalSpan = document.getElementById("totalAmount");
+
+  if (!tbody || !resultsCard || !totalSpan) return;
+
+  const filas = [
     {
-      text: `Antigüedad Art. 245 (${yearsForIndemnity} período/s)`,
-      amount: art245,
+      concepto: "Indemnización por Antigüedad (Art. 245)",
+      monto: datos.montoAntiguedad,
     },
-    { text: "Indemnización Sustitutiva de Preaviso", amount: preaviso },
-    { text: "Integración Mes de Despido", amount: integracion },
-    { text: "SAC Proporcional", amount: sacProporcional },
     {
-      text: "Vacaciones No Gozadas + SAC s/Vac",
-      amount: vacNoGozadas + sacSobreVacaciones,
+      concepto: "Indemnización Sustitutiva de Preaviso",
+      monto: datos.montoPreaviso,
+    },
+    { concepto: "SAC sobre Preaviso", monto: datos.sacSobrePreaviso },
+    {
+      concepto: `Integración Mes de Despido (${datos.diasIntegracion} días)`,
+      monto: datos.montoIntegracion,
+    },
+    { concepto: "SAC sobre Integración", monto: datos.sacSobreIntegracion },
+    {
+      concepto: `Días Trabajados del Mes (${datos.diasTrabajadosMes} días)`,
+      monto: datos.montoDiasMes,
+    },
+    { concepto: "SAC Proporcional", monto: datos.sacProporcional },
+    {
+      concepto: `Vacaciones No Gozadas Año en Curso (${datos.vacacionesEnCurso.diasProporcionales} días)`,
+      monto: datos.vacacionesEnCurso.montoVacaciones,
+    },
+    {
+      concepto: "SAC sobre Vacaciones Año en Curso",
+      monto: datos.vacacionesEnCurso.sacSobreVacaciones,
+    },
+    {
+      concepto: `Vacaciones No Gozadas Año Anterior Adeudadas (${datos.vacacionesAnioAnterior.dias} días)`,
+      monto: datos.vacacionesAnioAnterior.montoVacaciones,
+    },
+    {
+      concepto: "SAC sobre Vacaciones Año Anterior Adeudadas",
+      monto: datos.vacacionesAnioAnterior.sacSobreVacaciones,
     },
   ];
 
-  const tbody = document.querySelector("#resultsTable tbody");
   tbody.innerHTML = "";
-  let totalSum = 0;
-
-  items.forEach((item) => {
-    totalSum += item.amount;
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${item.text}</td>
-      <td>$ ${item.amount.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-    `;
-    tbody.appendChild(row);
+  filas.forEach((f) => {
+    if (f.monto > 0) {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${f.concepto}</td><td>${formatMoneda(f.monto)}</td>`;
+      tbody.appendChild(tr);
+    }
   });
 
-  document.getElementById("totalAmount").innerText = totalSum.toLocaleString(
-    "es-AR",
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    },
-  );
-
-  document.getElementById("results").classList.remove("hidden");
-
-  // Guardar contador de uso
-  registrarUso(totalSum);
-});
+  totalSpan.textContent = formatMoneda(datos.totalLiquidacion)
+    .replace("$", "")
+    .trim();
+  resultsCard.classList.remove("hidden");
+  resultsCard.scrollIntoView({ behavior: "smooth" });
+}

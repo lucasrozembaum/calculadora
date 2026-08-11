@@ -9,19 +9,23 @@
     <meta name="theme-color" content="#10b981" />
   </head>
   <body>
-    <!-- PANTALLA DE ACTIVACIÓN CON PIN -->
+    <!-- PANTALLA DE ACTIVACIÓN CON CLAVE -->
     <div id="activationScreen" class="lock-overlay">
       <div class="lock-card">
         <h2>Activación de App</h2>
-        <p>Ingresá el PIN de activación para habilitar esta aplicación:</p>
+        <p>
+          Ingresá la contraseña de activación para habilitar esta aplicación:
+        </p>
         <input
           type="password"
           id="accessPin"
-          placeholder="Ej: 1234"
-          maxlength="8"
+          placeholder="Contraseña de acceso"
+          maxlength="30"
         />
         <button id="activateBtn" type="button">Activar Aplicación</button>
-        <p id="activationError" class="error-msg hidden">PIN incorrecto.</p>
+        <p id="activationError" class="error-msg hidden">
+          Contraseña incorrecta.
+        </p>
       </div>
     </div>
 
@@ -69,6 +73,16 @@
           </select>
         </div>
 
+        <div class="form-group">
+          <label for="vacation2025"
+            >¿Gozó las vacaciones del año anterior?</label
+          >
+          <select id="vacation2025">
+            <option value="si">Sí (Ya gozadas)</option>
+            <option value="no">No (Adeudadas)</option>
+          </select>
+        </div>
+
         <button type="submit" id="submitBtn">Calcular Liquidación</button>
       </form>
 
@@ -89,6 +103,16 @@
           <strong>Total Estimado: $<span id="totalAmount">0.00</span></strong>
         </div>
       </div>
+
+      <!-- PIE DE PÁGINA CENTRADO Y ORDENADO EN LÍNEAS -->
+      <footer class="app-footer">
+        <p>
+          Calculadora realizada por la
+          <strong>Delegación Córdoba Capital</strong>
+        </p>
+        <span class="location-tag">Made in Córdoba Capital</span>
+        <span class="motto-tag">Córdoba no para</span>
+      </footer>
     </div>
 
     <!-- MODAL DE REPORTE DE USO -->
