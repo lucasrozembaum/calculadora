@@ -28,7 +28,7 @@ let logoClickTimer = null;
 let ultimaGrillaCalculada = [];
 let ultimosTramos = [];
 
-// ACTIVIDADES CON NOMBRES LIMPIOS
+// ACTIVIDADES PRECARGADAS EN PESOS ARGENTINOS ($ ARS)
 const ACTIVIDADES_PRECARGADAS = [
   {
     nombre: "Desmalezado Manual (Desyuyada)",
@@ -46,6 +46,18 @@ const ACTIVIDADES_PRECARGADAS = [
       { nombre: "Puestero o sereno", basico: 1164597.76 },
       { nombre: "Capataz", basico: 1284621.91 },
       { nombre: "Encargado", basico: 1355114.98 },
+    ],
+  },
+  {
+    nombre: "Cultivo de Hongos Comestibles",
+    categorias: [
+      { nombre: "Trabajador no calificado", basico: 929153.46 },
+      { nombre: "Trabajador semi calificado", basico: 966122.69 },
+      { nombre: "Trabajador calificado", basico: 1030755.48 },
+      { nombre: "Especializado", basico: 1090723.81 },
+      { nombre: "Capataz", basico: 1115006.3 },
+      { nombre: "Encargado", basico: 1126855.46 },
+      { nombre: "Supervisor", basico: 1109977.76 },
     ],
   },
   {
@@ -75,18 +87,6 @@ const ACTIVIDADES_PRECARGADAS = [
     ],
   },
   {
-    nombre: "Cultivo de Hongos Comestibles",
-    categorias: [
-      { nombre: "Trabajador no calificado", basico: 853153.46 },
-      { nombre: "Trabajador semi calificado", basico: 890122.69 },
-      { nombre: "Trabajador calificado", basico: 954755.48 },
-      { nombre: "Especializado", basico: 1014723.81 },
-      { nombre: "Capataz", basico: 1039006.3 },
-      { nombre: "Encargado", basico: 1050855.46 },
-      { nombre: "Supervisor", basico: 1033977.76 },
-    ],
-  },
-  {
     nombre: "Lavaderos de Verduras",
     categorias: [
       { nombre: "Peón general", basico: 1071383.93 },
@@ -110,6 +110,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initListeners();
   setupLogoSecret();
   pobladorSelectorActividades();
+  solicitarPermisoNotificaciones();
 });
 
 function initListeners() {
@@ -151,7 +152,7 @@ function setupLogoSecret() {
   const logo = document.querySelector(".delegacion-logo");
   if (!logo) return;
 
-  logo.addEventListener("click", () => {
+  const handleLogoClick = () => {
     logoClicks++;
     if (logoClicks === 3) {
       clearTimeout(logoClickTimer);
@@ -170,7 +171,9 @@ function setupLogoSecret() {
     logoClickTimer = setTimeout(() => {
       logoClicks = 0;
     }, 1500);
-  });
+  };
+
+  logo.addEventListener("click", handleLogoClick);
 }
 
 function validarPin() {
@@ -192,7 +195,10 @@ function unlockApp() {
   document.getElementById("activationScreen").classList.add("hidden");
   if (currentUserRole === "admin") {
     const adminNav = document.getElementById("adminNav");
-    if (adminNav) adminNav.classList.remove("hidden");
+    if (adminNav) {
+      adminNav.classList.remove("hidden");
+      adminNav.style.display = "flex";
+    }
     cargarHistorialNube();
   }
 }
@@ -209,17 +215,21 @@ function switchView(viewId, btnActive) {
   document
     .querySelectorAll(".app-view")
     .forEach((v) => v.classList.add("hidden"));
-  document.getElementById(viewId).classList.remove("hidden");
+  const targetView = document.getElementById(viewId);
+  if (targetView) targetView.classList.remove("hidden");
+
   document
     .querySelectorAll(".nav-btn")
     .forEach((b) => b.classList.remove("active"));
   if (btnActive) btnActive.classList.add("active");
 }
 
-// --- POBLAR SELECTOR DINETE Y LIMPIO ---
+// --- POBLAR SELECTOR BASE ---
 function pobladorSelectorActividades() {
   const select = document.getElementById("selectHistorial");
-  select.innerHTML = '<option value="nueva">Crear Nueva Actividad...</option>';
+  if (!select) return;
+  select.innerHTML =
+    '<option value="nueva">➕ Crear Nueva Actividad / Acuerdo...</option>';
 
   ACTIVIDADES_PRECARGADAS.forEach((act, idx) => {
     const opt = document.createElement("option");
@@ -240,18 +250,54 @@ function cargarDatosActividadSeleccionada() {
     const idx = parseInt(val.replace("pre_", ""));
     const act = ACTIVIDADES_PRECARGADAS[idx];
     document.getElementById("actividadNombre").value = act.nombre;
+    document.getElementById("mesInicio").value = "";
 
     act.categorias.forEach((cat) => {
       agregarFilaCategoria(cat.nombre, cat.basico);
     });
     agregarFilaTramo();
+    document.getElementById("paritariasResults").classList.add("hidden");
   } else if (val === "nueva") {
     document.getElementById("actividadNombre").value = "";
+    document.getElementById("mesInicio").value = "";
     agregarFilaCategoria();
     agregarFilaTramo();
+    document.getElementById("paritariasResults").classList.add("hidden");
+  } else {
+    // CARGAR DESDE LA NUBE
+    db.collection("paritarias")
+      .doc(val)
+      .get()
+      .then((doc) => {
+        if (doc.exists) {
+          const data = doc.data();
+          document.getElementById("actividadNombre").value =
+            data.actividad || "";
+          document.getElementById("mesInicio").value = data.mesInicio || "";
+
+          if (data.categoriasBase) {
+            data.categoriasBase.forEach((cat) =>
+              agregarFilaCategoria(cat.nombre, cat.basico),
+            );
+          }
+          if (data.tramos) {
+            data.tramos.forEach((t) =>
+              agregarFilaTramo(t.porcentaje, t.detalle),
+            );
+          }
+
+          if (data.grillaCalculada && data.tramos) {
+            ultimaGrillaCalculada = data.grillaCalculada;
+            ultimosTramos = data.tramos;
+            renderTablaGrilla(data.grillaCalculada, data.tramos);
+          }
+        }
+      })
+      .catch((e) => console.error("Error al cargar período de la nube: ", e));
   }
 }
 
+// EDITAR O AGREGAR CATEGORÍAS
 function agregarFilaCategoria(nombre = "", basico = "") {
   const container = document.getElementById("categoriasContainer");
   const div = document.createElement("div");
@@ -260,12 +306,13 @@ function agregarFilaCategoria(nombre = "", basico = "") {
     "display:flex; gap:10px; margin-bottom:8px; align-items:center;";
   div.innerHTML = `
     <input type="text" placeholder="Categoría" class="cat-nombre" value="${nombre}" style="width:55%" required> 
-    <input type="number" step="0.01" placeholder="Básico ($)" class="cat-basico" value="${basico}" style="width:35%" required>
+    <input type="number" step="0.01" placeholder="Básico en Pesos ($)" class="cat-basico" value="${basico}" style="width:35%" required>
     <button type="button" onclick="this.parentElement.remove()" style="width:10%; background:#ef4444; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer;">🗑️</button>
   `;
   container.appendChild(div);
 }
 
+// EDITAR, ELIMINAR O CONGELAR MESES DE AUMENTO
 function agregarFilaTramo(pct = "", det = "") {
   const container = document.getElementById("tramosContainer");
   const div = document.createElement("div");
@@ -280,25 +327,28 @@ function agregarFilaTramo(pct = "", det = "") {
   container.appendChild(div);
 }
 
-// --- HISTORIAL DESDE LA NUBE (FILTRADO AUTOMÁTICO DE NOMBRES LARGOS) ---
+// CARGAR HISTORIAL DE LA NUBE (NOMBRES LIMPIOS SIN REPETICIONES)
 async function cargarHistorialNube() {
   try {
     const select = document.getElementById("selectHistorial");
+    if (!select) return;
+
+    pobladorSelectorActividades();
+
     const snapshot = await db
       .collection("paritarias")
       .orderBy("fechaGuardado", "desc")
       .get();
 
-    const nombresExistentes = new Set();
+    const nombresRegistrados = new Set();
     Array.from(select.options).forEach((opt) =>
-      nombresExistentes.add(opt.text.trim().toLowerCase()),
+      nombresRegistrados.add(opt.text.trim().toLowerCase()),
     );
 
     snapshot.forEach((doc) => {
       const data = doc.data();
       if (!data.actividad) return;
 
-      // FILTRO: Limpia [Nube], resoluciones, fechas y agregados molestos
       let nombreLimpio = data.actividad
         .replace(/\[Nube\]/gi, "")
         .replace(/\(Res\..*?\)/gi, "")
@@ -309,21 +359,56 @@ async function cargarHistorialNube() {
       if (nombreLimpio.endsWith("-"))
         nombreLimpio = nombreLimpio.slice(0, -1).trim();
 
-      if (!nombresExistentes.has(nombreLimpio.toLowerCase())) {
-        nombresExistentes.add(nombreLimpio.toLowerCase());
+      if (!nombresRegistrados.has(nombreLimpio.toLowerCase())) {
+        nombresRegistrados.add(nombreLimpio.toLowerCase());
 
         const option = document.createElement("option");
         option.value = doc.id;
-        option.text = nombreLimpio; // Muestra solo el nombre 100% limpio
+        option.text = nombreLimpio;
         select.add(option);
       }
+
+      verificarVencimientoSilencioso(data);
     });
   } catch (e) {
     console.error("Error al obtener historial de la nube: ", e);
   }
 }
 
-// --- CÁLCULO, FIREBASE Y MAIL ---
+function solicitarPermisoNotificaciones() {
+  if ("Notification" in window && Notification.permission !== "granted") {
+    Notification.requestPermission();
+  }
+}
+
+function verificarVencimientoSilencioso(data) {
+  if (!data.mesInicio || !data.tramos || data.tramos.length === 0) return;
+
+  const [anio, mes] = data.mesInicio.split("-").map(Number);
+  const fechaFin = new Date(anio, mes - 1 + data.tramos.length, 1);
+  const fechaHoy = new Date();
+
+  const diffTiempo = fechaFin - fechaHoy;
+  const diffDias = Math.ceil(diffTiempo / (1000 * 60 * 60 * 24));
+
+  if (diffDias <= 30 && diffDias >= -5) {
+    dispararNotificacionPWA(
+      `Alerta Paritaria: ${data.actividad}`,
+      `Quedan ${diffDias} días para el vencimiento del último aumento programado.`,
+    );
+  }
+}
+
+function dispararNotificacionPWA(titulo, mensaje) {
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(titulo, {
+      body: mensaje,
+      icon: "logo.png",
+    });
+  }
+}
+
+// CÁLCULO, RE-GUARDADO EN NUBE, WORD Y MAIL
 async function guardarYCalcularGrilla(e) {
   e.preventDefault();
   const actividadNombre = document.getElementById("actividadNombre").value;
@@ -387,7 +472,13 @@ async function guardarYCalcularGrilla(e) {
     renderTablaGrilla(grillaCalculada, tramos);
     alert("¡Escala guardada en la Nube con éxito!");
 
-    enviarEmailDirecto();
+    generarDocumentoWord();
+
+    setTimeout(() => {
+      enviarEmailDirecto();
+    }, 1000);
+
+    cargarHistorialNube();
   } catch (err) {
     alert("Error al guardar en la nube: " + err.message);
   }
@@ -397,7 +488,7 @@ function renderTablaGrilla(grilla, tramos) {
   const theadTr = document.getElementById("escalaTableHead");
   const tbody = document.querySelector("#escalaTable tbody");
 
-  let headHtml = "<th>Categoría Profesional</th><th>Base Inicial ($)</th>";
+  let headHtml = "<th>Categoría Profesional</th><th>Base Inicial ($ ARS)</th>";
   tramos.forEach((t) => {
     headHtml += `<th>${t.detalle} (+${t.porcentaje}%)</th>`;
   });
@@ -421,20 +512,7 @@ function enviarEmailDirecto() {
     document.getElementById("actividadNombre").value || "Actividad Rural";
   const mesInicio = document.getElementById("mesInicio").value || "S/D";
 
-  let cuerpo = `DELEGACIÓN CÓRDOBA CAPITAL - UATRE\n`;
-  cuerpo += `REPORTE DE ESCALA SALARIAL: ${actividad}\n`;
-  cuerpo += `Mes de Inicio: ${mesInicio}\n\n`;
-  cuerpo += `GRILLA SALARIAL CALCULADA:\n`;
-  cuerpo += `--------------------------------------------------\n`;
-
-  ultimaGrillaCalculada.forEach((row) => {
-    cuerpo += `• ${row.categoria}:\n`;
-    cuerpo += `  - Base inicial: $${row.valores[0].toFixed(2)}\n`;
-    ultimosTramos.forEach((t, idx) => {
-      cuerpo += `  - ${t.detalle} (+${t.porcentaje}%): $${row.valores[idx + 1].toFixed(2)}\n`;
-    });
-    cuerpo += `--------------------------------------------------\n`;
-  });
+  let cuerpo = `Estimado,\n\nSe adjunta la escala salarial en documento Word (.docx) para la actividad: ${actividad}.\nMes de Inicio: ${mesInicio}\n\nSaludos cordiales,\nDelegación Córdoba Capital - UATRE`;
 
   const mailtoUrl = `mailto:${DESTINATARIO_MAIL}?subject=${encodeURIComponent("Escala Salarial: " + actividad)}&body=${encodeURIComponent(cuerpo)}`;
   window.location.href = mailtoUrl;
@@ -467,7 +545,7 @@ function generarDocumentoWord() {
     new TableCell({
       children: [
         new Paragraph({
-          children: [new TextRun({ text: "Base Inicial ($)", bold: true })],
+          children: [new TextRun({ text: "Base Inicial ($ ARS)", bold: true })],
         }),
       ],
     }),
@@ -540,6 +618,7 @@ function generarDocumentoWord() {
   Packer.toBlob(doc).then((blob) => saveAs(blob, `Escala_${actividad}.docx`));
 }
 
+// --- CALCULADORA DE INDEMNIZACIONES ORIGINAL COMPLETA ---
 function calcularIndemnizacion(e) {
   e.preventDefault();
   const salary = parseFloat(document.getElementById("salary").value) || 0;
