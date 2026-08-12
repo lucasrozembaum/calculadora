@@ -3,19 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Calculadora Rural</title>
+    <title>Calculadora Rural & Gestión Paritaria</title>
     <link rel="stylesheet" href="styles.css" />
     <link rel="manifest" href="manifest.json" />
     <meta name="theme-color" content="#10b981" />
+
+    <!-- LIBRERÍAS DE EXPORTACIÓN Y FIREBASE -->
+    <script src="https://unpkg.com/docx@7.8.2/build/index.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   </head>
   <body>
-    <!-- PANTALLA DE ACTIVACIÓN CON CLAVE -->
+    <!-- PANTALLA DE ACTIVACIÓN / LOGIN CON CLAVE -->
     <div id="activationScreen" class="lock-overlay">
       <div class="lock-card">
         <h2>Activación de App</h2>
-        <p>
-          Ingresá la contraseña de activación para habilitar esta aplicación:
-        </p>
+        <p>Ingresá tu contraseña de acceso para habilitar la aplicación:</p>
         <input
           type="password"
           id="accessPin"
@@ -49,58 +53,177 @@
         </button>
       </div>
 
-      <form id="calcForm">
-        <div class="form-group">
-          <label for="salary">Mejor Remuneración Mensual ($):</label>
-          <input type="number" id="salary" placeholder="Ej: 650000" required />
-        </div>
+      <!-- BARRA DE NAVEGACIÓN PRIVADA (Solo visible para Administrador) -->
+      <nav id="adminNav" class="admin-nav hidden">
+        <button id="navCalcBtn" type="button" class="nav-btn active">
+          🧮 Calculadora
+        </button>
+        <button id="navParitariasBtn" type="button" class="nav-btn">
+          📊 Escalas Paritarias
+        </button>
+      </nav>
 
-        <div class="form-group">
-          <label for="startDate">Fecha de Ingreso:</label>
-          <input type="date" id="startDate" required />
-        </div>
+      <!-- VISTA 1: CALCULADORA PÚBLICA -->
+      <div id="calcView" class="app-view">
+        <form id="calcForm">
+          <div class="form-group">
+            <label for="salary">Mejor Remuneración Mensual ($):</label>
+            <input
+              type="number"
+              id="salary"
+              placeholder="Ej: 650000"
+              required
+            />
+          </div>
 
-        <div class="form-group">
-          <label for="endDate">Fecha de Egreso:</label>
-          <input type="date" id="endDate" required />
-        </div>
+          <div class="form-group">
+            <label for="startDate">Fecha de Ingreso:</label>
+            <input type="date" id="startDate" required />
+          </div>
 
-        <div class="form-group">
-          <label for="notice">¿Recibió Preaviso?</label>
-          <select id="notice">
-            <option value="no">No</option>
-            <option value="si">Sí</option>
-          </select>
-        </div>
+          <div class="form-group">
+            <label for="endDate">Fecha de Egreso:</label>
+            <input type="date" id="endDate" required />
+          </div>
 
-        <div class="form-group">
-          <label for="vacation2025"
-            >¿Gozó las vacaciones del año anterior?</label
-          >
-          <select id="vacation2025">
-            <option value="si">Sí (Ya gozadas)</option>
-            <option value="no">No (Adeudadas)</option>
-          </select>
-        </div>
+          <div class="form-group">
+            <label for="notice">¿Recibió Preaviso?</label>
+            <select id="notice">
+              <option value="no">No</option>
+              <option value="si">Sí</option>
+            </select>
+          </div>
 
-        <button type="submit" id="submitBtn">Calcular Liquidación</button>
-      </form>
+          <div class="form-group">
+            <label for="vacation2025"
+              >¿Gozó las vacaciones del año anterior?</label
+            >
+            <select id="vacation2025">
+              <option value="si">Sí (Ya gozadas)</option>
+              <option value="no">No (Adeudadas)</option>
+            </select>
+          </div>
 
-      <div id="results" class="results-card hidden">
-        <h3>Resumen de Liquidación</h3>
-        <div class="table-responsive">
-          <table id="resultsTable">
-            <thead>
-              <tr>
-                <th>Concepto</th>
-                <th>Monto ($)</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+          <button type="submit" id="submitBtn">Calcular Liquidación</button>
+        </form>
+
+        <div id="results" class="results-card hidden">
+          <h3>Resumen de Liquidación</h3>
+          <div class="table-responsive">
+            <table id="resultsTable">
+              <thead>
+                <tr>
+                  <th>Concepto</th>
+                  <th>Monto ($)</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div class="total-box">
+            <strong>Total Estimado: $<span id="totalAmount">0.00</span></strong>
+          </div>
         </div>
-        <div class="total-box">
-          <strong>Total Estimado: $<span id="totalAmount">0.00</span></strong>
+      </div>
+
+      <!-- VISTA 2: GESTIÓN DE PARITARIAS Y TABLAS (Privado Admin) -->
+      <div id="paritariasView" class="app-view hidden">
+        <div class="paritarias-card">
+          <h3>Seguimiento de Escalas Salariales (CAR 5)</h3>
+          <p class="section-desc">
+            Seleccioná una actividad existente o creá una nueva con todas sus
+            categorías.
+          </p>
+
+          <!-- SELECCIÓN DE HISTORIAL Y PRECARGADOS -->
+          <div class="form-group cloud-history-box">
+            <label for="selectHistorial"
+              >📂 Seleccionar o Cargar Actividad:</label
+            >
+            <select id="selectHistorial">
+              <option value="nueva">➕ Crear Nueva Actividad...</option>
+            </select>
+          </div>
+
+          <form id="paritariasForm">
+            <div class="form-group">
+              <label for="actividadNombre"
+                >Nombre de la Actividad / Convenio:</label
+              >
+              <input
+                type="text"
+                id="actividadNombre"
+                placeholder="Ej: Viveros y Floricultura (Res. 43/2026)"
+                required
+              />
+            </div>
+
+            <div class="form-group">
+              <label for="mesInicio">Mes de Inicio del Acuerdo:</label>
+              <input type="month" id="mesInicio" required />
+            </div>
+
+            <hr class="form-divider" />
+            <h4>1. Categorías Profesionales y Básico de Partida</h4>
+            <div id="categoriasContainer" class="tramos-container">
+              <!-- Se agregan dinámicamente -->
+            </div>
+            <button
+              id="addCategoriaBtn"
+              type="button"
+              class="btn-secondary btn-full"
+              style="margin-bottom: 15px"
+            >
+              ➕ Agregar Categoría Profesional
+            </button>
+
+            <hr class="form-divider" />
+            <h4>2. Aumentos Programados (% Mensual)</h4>
+            <div id="tramosContainer" class="tramos-container">
+              <!-- Se agregan dinámicamente -->
+            </div>
+
+            <button
+              id="addTramoBtn"
+              type="button"
+              class="btn-secondary btn-full"
+              style="margin-bottom: 20px"
+            >
+              ➕ Agregar Tramo / Mes
+            </button>
+
+            <button type="submit" class="btn-primary-action">
+              ⚙️ Calcular, Guardar y Enviar a Mail
+            </button>
+          </form>
+
+          <!-- VISTA PREVIA DE LA TABLA Y ACCIONES -->
+          <div id="paritariasResults" class="paritarias-results hidden">
+            <hr class="form-divider" />
+            <h4>Grilla Salarial Proyectada</h4>
+            <div class="table-responsive" style="overflow-x: auto">
+              <table id="escalaTable">
+                <thead>
+                  <tr id="escalaTableHead">
+                    <th>Categoría</th>
+                    <th>Base Partida</th>
+                  </tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+
+            <div class="export-box">
+              <div class="btn-group-export">
+                <button id="downloadDocxBtn" type="button" class="btn-docx">
+                  📄 Descargar Documento Word (.docx)
+                </button>
+                <button id="sendEmailBtn" type="button" class="btn-email">
+                  ✉️ Re-enviar por Correo
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

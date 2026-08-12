@@ -1,61 +1,38 @@
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap");
-
 :root {
   --primary: #10b981;
   --primary-dark: #059669;
-  --bg: #f8fafc;
+  --bg: #f3f4f6;
   --card-bg: #ffffff;
-  --text: #0f172a;
-  --text-muted: #64748b;
-  --border: #e2e8f0;
-  --radius: 14px;
+  --text: #1f2937;
+  --text-muted: #6b7280;
+  --border: #d1d5db;
 }
 
-/* Reset de pantalla global */
-*,
-*::before,
-*::after {
+* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family:
-    "Plus Jakarta Sans",
-    -apple-system,
-    BlinkMacSystemFont,
-    sans-serif;
+  font-family: sans-serif;
 }
 
-html {
-  /* Define una base de texto fluida para todo el documento */
-  font-size: clamp(14px, 3.8vw, 16px);
-}
-
-html,
 body {
-  width: 100%;
-  min-height: 100vh;
   background-color: var(--bg);
   color: var(--text);
-  overflow-x: hidden;
+  padding: 20px;
 }
 
-body {
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: clamp(8px, 3vw, 16px);
-}
-
-/* Tarjeta principal */
+/* Contenedores generales */
 .calculator-container {
-  background: var(--card-bg);
-  border-radius: var(--radius);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-  border: 1px solid var(--border);
-  width: 100%;
-  max-width: 480px;
-  padding: clamp(16px, 4vw, 24px);
+  max-width: 500px;
   margin: 0 auto;
+  background: var(--card-bg);
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.hidden {
+  display: none !important;
 }
 
 /* Encabezado */
@@ -63,235 +40,122 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 18px;
-  width: 100%;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--primary);
+  padding-bottom: 10px;
 }
-
 .brand-container {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex: 1;
-  min-width: 0;
 }
-
 .delegacion-logo {
-  width: clamp(36px, 10vw, 48px);
-  height: clamp(36px, 10vw, 48px);
-  object-fit: contain;
+  width: clamp(52px, 13vw, 66px) !important;
+  height: clamp(52px, 13vw, 66px) !important;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1.35);
+  border: none !important;
+  box-shadow: none !important;
+  background-color: transparent;
   flex-shrink: 0;
 }
 
-.brand-container h2 {
-  /* El título escala según el ancho de la pantalla */
-  font-size: clamp(0.9rem, 4vw, 1.15rem);
-  font-weight: 700;
-  line-height: 1.25;
-  color: var(--text);
+/* Barra de Navegación Privada */
+.admin-nav {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  background: #e5e7eb;
+  padding: 5px;
+  border-radius: 8px;
 }
-
-.sub-title {
-  font-size: clamp(0.68rem, 2.8vw, 0.8rem);
-  color: var(--text-muted);
+.nav-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
   font-weight: 600;
-  display: block;
+  background: transparent;
+  transition: 0.3s;
+}
+.nav-btn.active {
+  background: var(--primary);
+  color: white;
 }
 
-/* Formulario e Inpust */
+/* Formularios */
 .form-group {
-  margin-bottom: 14px;
-  width: 100%;
+  margin-bottom: 15px;
 }
-
 label {
   display: block;
-  font-size: clamp(0.78rem, 3vw, 0.88rem);
-  font-weight: 600;
-  color: var(--text-muted);
   margin-bottom: 5px;
+  font-weight: 600;
+  font-size: 0.9rem;
 }
-
 input,
 select {
   width: 100%;
-  padding: clamp(10px, 3vw, 12px);
-  border: 1.5px solid var(--border);
+  padding: 10px;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  font-size: clamp(0.88rem, 3.5vw, 1rem);
-  color: var(--text);
-  background-color: #f8fafc;
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
+  font-size: 1rem;
 }
-
-input:focus,
-select:focus {
-  border-color: var(--primary);
-  background-color: #ffffff;
-}
-
-/* Botones con texto fluido */
 button {
   width: 100%;
-  padding: clamp(12px, 3.5vw, 15px);
-  background-color: var(--primary);
-  color: white;
+  padding: 12px;
   border: none;
   border-radius: 8px;
-  font-size: clamp(0.88rem, 3.5vw, 1rem);
+  background: var(--primary);
+  color: white;
   font-weight: 700;
   cursor: pointer;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
-.btn-secondary {
-  background: #f1f5f9;
-  color: #334155;
-  padding: 6px 10px;
-  font-size: clamp(0.7rem, 2.8vw, 0.8rem);
-  border-radius: 6px;
-  width: auto;
-  margin-top: 0;
-  white-space: nowrap;
-  flex-shrink: 0;
+/* Botones Exportación Word y Email */
+.btn-docx {
+  background-color: #2b5797 !important;
+} /* Azul Word */
+.btn-email {
+  background-color: #f97316 !important;
+} /* Naranja Email */
+.btn-group-export {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 15px;
 }
 
-/* Resultados y Tabla Fluida */
+/* Resultados */
 .results-card {
   margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px dashed var(--border);
-  width: 100%;
+  padding: 15px;
+  background: #f9fafb;
+  border-radius: 8px;
 }
-
-.results-card h3 {
-  font-size: clamp(0.95rem, 3.8vw, 1.1rem);
-  margin-bottom: 12px;
-}
-
-.table-responsive {
-  width: 100%;
-  overflow-x: auto;
-}
-
 table {
   width: 100%;
   border-collapse: collapse;
-  margin-bottom: 15px;
+  margin-top: 10px;
 }
-
-th {
-  font-size: clamp(0.65rem, 2.5vw, 0.75rem);
-  text-transform: uppercase;
-  color: var(--text-muted);
-  text-align: left;
-  padding: 8px 4px;
-}
-
+th,
 td {
-  padding: 10px 4px;
-  font-size: clamp(0.78rem, 3.2vw, 0.9rem);
-  border-bottom: 1px solid #f1f5f9;
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.9rem;
 }
-
-th:last-child,
-td:last-child {
-  text-align: right;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
 .total-box {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
-  padding: clamp(12px, 3.5vw, 16px);
-  border-radius: 10px;
-  color: #065f46;
-  font-size: clamp(0.9rem, 3.8vw, 1.1rem);
+  margin-top: 15px;
   text-align: right;
-  width: 100%;
+  font-size: 1.1rem;
 }
 
-/* Ajuste especial para celulares muy angostos (pantallas < 360px) */
-@media (max-width: 360px) {
-  .header-bar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .btn-secondary {
-    align-self: flex-end;
-  }
-}
-
-/* Pantallas de bloqueo / Modales */
-.lock-overlay,
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(15, 23, 42, 0.85);
-  backdrop-filter: blur(4px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  padding: 16px;
-}
-
-.lock-card,
-.modal-card {
-  background: #ffffff;
-  padding: clamp(18px, 5vw, 26px);
-  border-radius: 14px;
-  width: 100%;
-  max-width: 360px;
-  text-align: center;
-}
-
-.lock-card h2 {
-  font-size: clamp(1.1rem, 4.5vw, 1.3rem);
-  margin-bottom: 8px;
-}
-
-.lock-card p {
-  font-size: clamp(0.8rem, 3vw, 0.9rem);
-  color: var(--text-muted);
-}
-
-.hidden {
-  display: none !important;
-}
-/* Estilos para el Leyenda / Pie de página */
-.app-footer {
-  margin-top: 24px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
-  text-align: center;
-  font-size: clamp(0.72rem, 2.8vw, 0.82rem);
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-
-.app-footer strong {
-  color: var(--text);
-}
-
-.location-tag {
-  display: block;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--primary-dark);
-  margin-top: 2px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-/* Pie de página centrado, compacto y responsivo */
+/* Footer */
 .app-footer {
   margin-top: 18px;
   padding-top: 12px;
@@ -299,18 +163,10 @@ td:last-child {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
   text-align: center;
   font-size: clamp(0.65rem, 2.4vw, 0.75rem);
   color: var(--text-muted);
-  line-height: 1.4;
 }
-
-.app-footer strong {
-  color: var(--text);
-  font-weight: 600;
-}
-
 .location-tag {
   display: block;
   font-size: clamp(0.6rem, 2.2vw, 0.7rem);
@@ -318,83 +174,32 @@ td:last-child {
   color: var(--primary-dark);
   margin-top: 4px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
-
 .motto-tag {
   display: block;
   font-size: clamp(0.62rem, 2.3vw, 0.72rem);
   font-weight: 700;
-  color: #0284c7; /* Azul sutil institucional */
+  color: #0284c7;
   margin-top: 2px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
-/* Ajuste de contenedor del encabezado */
-.brand-container {
+
+/* Pantalla Bloqueo */
+.lock-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: white;
+  z-index: 100;
   display: flex;
   align-items: center;
-  gap: 14px;
-  flex: 1;
-  min-width: 0;
+  justify-content: center;
+  padding: 20px;
 }
-
-/* Contenedor y efecto para el Logo Circular de la Delegación */
-.delegacion-logo {
-  /* Agrandamos el tamaño general (2 a 3 veces más grande que el anterior) */
-  width: clamp(75px, 18vw, 95px) !important;
-  height: clamp(75px, 18vw, 95px) !important;
-
-  /* Marco redondo perfecto */
-  border-radius: 50%;
-
-  /* Zoom interno (scale) para eliminar los bordes blancos sobramtes del PNG */
-  object-fit: cover;
-  object-position: center;
-  transform: scale(1.35); /* Hace "zoom" para recortar el aire blanco */
-
-  /* Fondo, borde e iluminación estética */
-  background-color: #ffffff;
-  border: 2px solid var(--primary);
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-
-  flex-shrink: 0;
-  transition: transform 0.3s ease;
-}
-
-/* Ajustes de texto para acompañar la nueva altura del logo */
-.brand-container h2 {
-  font-size: clamp(1rem, 4.2vw, 1.25rem);
-  font-weight: 700;
-  line-height: 1.2;
-  color: var(--text);
-}
-
-.sub-title {
-  font-size: clamp(0.75rem, 3vw, 0.88rem);
-  color: var(--text-muted);
-  font-weight: 600;
-  display: block;
-  margin-top: 3px;
-}
-/* Contenedor y efecto para el Logo Circular de la Delegación (Sin bordes y un 30% más chico) */
-.delegacion-logo {
-  /* Tamaño reducido un 30% (de 75-95px a 52-66px) */
-  width: clamp(52px, 13vw, 66px) !important;
-  height: clamp(52px, 13vw, 66px) !important;
-
-  /* Marco redondo perfecto */
-  border-radius: 50%;
-
-  /* Zoom interno para recortar los bordes blancos del PNG */
-  object-fit: cover;
-  object-position: center;
-  transform: scale(1.35);
-
-  /* Sin borde ni sombra */
-  border: none !important;
-  box-shadow: none !important;
-  background-color: transparent;
-
-  flex-shrink: 0;
+.lock-card {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
 }

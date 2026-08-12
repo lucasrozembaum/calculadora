@@ -1,360 +1,652 @@
 /**
- * Calculadora de Indemnizaciones Rurales - Ley 26.727 & LCT
- * Delegación Regional UATRE
+ * Calculadora Rural & Gestión Paritaria Multi-Categoría
+ * Delegación Córdoba Capital — CAR 5
  */
 
-// 🔑 CLAVE DE ACTIVACIÓN DE LA APP
-const ACTIVATION_PIN = "delegacioncordoba";
+// --- CONFIGURACIÓN DE ACCESO Y MAIL ---
+const USER_PIN = "delegacioncordoba";
+const ADMIN_PIN = "admincordoba";
+const DESTINATARIO_MAIL = "lucasrozembaum@gmail.com";
+
+// --- CONFIGURACIÓN DE FIREBASE ---
+const firebaseConfig = {
+  apiKey: "AIzaSyAYmr5gh35AP2aBAmG7nUG19Sv4p34Zlzk",
+  authDomain: "firestore-database-5f05d.firebaseapp.com",
+  projectId: "firestore-database-5f05d",
+  storageBucket: "firestore-database-5f05d.firebasestorage.app",
+  messagingSenderId: "367295191590",
+  appId: "1:367295191590:web:1e0eb7e3b827e85c13b3ec",
+};
+
+// Inicializar Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+let currentUserRole = null;
+let logoClicks = 0;
+let logoClickTimer = null;
+let ultimaGrillaCalculada = [];
+let ultimosTramos = [];
+
+// ACTIVIDADES CON NOMBRES LIMPIOS
+const ACTIVIDADES_PRECARGADAS = [
+  {
+    nombre: "Desmalezado Manual (Desyuyada)",
+    categorias: [{ nombre: "Jornal Mínimo Garantizado", basico: 98116.62 }],
+  },
+  {
+    nombre: "Floricultura y Viveros",
+    categorias: [
+      { nombre: "Trabajador no calificado", basico: 1056230.17 },
+      { nombre: "Trabajador semi calificado", basico: 1082587.9 },
+      { nombre: "Trabajador calificado", basico: 1122247.43 },
+      { nombre: "Conductor tractorista", basico: 1161765.44 },
+      { nombre: "Chofer", basico: 1174989.42 },
+      { nombre: "Mecánico", basico: 1214647.19 },
+      { nombre: "Puestero o sereno", basico: 1164597.76 },
+      { nombre: "Capataz", basico: 1284621.91 },
+      { nombre: "Encargado", basico: 1355114.98 },
+    ],
+  },
+  {
+    nombre: "Manipulación y Almacenamiento de Granos",
+    categorias: [
+      { nombre: "Jornal Mínimo Garantizado", basico: 44545.38 },
+      {
+        nombre: "Descargar a granel / gravitación (por quintal)",
+        basico: 29.54,
+      },
+      { nombre: "Descargar a granel paleando (por quintal)", basico: 182.81 },
+      { nombre: "Palear en silos / celdas (por quintal)", basico: 587.14 },
+      { nombre: "Derecho carga/descarga c/cinta (por bolsa)", basico: 296.36 },
+      { nombre: "Derecho carga/descarga s/cinta (por bolsa)", basico: 369.55 },
+      { nombre: "Lauchero (por día)", basico: 73992.03 },
+    ],
+  },
+  {
+    nombre: "Cosecha de Papa",
+    categorias: [
+      { nombre: "Sueldo Mensual Garantizado", basico: 884881.21 },
+      { nombre: "Jornal del Personal de Cosecha", basico: 38932.89 },
+      { nombre: "Abridor de surco (por día)", basico: 43431.55 },
+      { nombre: "Juntando en bolsa (por bolsa)", basico: 467.03 },
+      { nombre: "Juntando en maleta-bolsa", basico: 954.26 },
+      { nombre: "Carga en chacra s/cinta (por bolsa)", basico: 302.94 },
+    ],
+  },
+  {
+    nombre: "Cultivo de Hongos Comestibles",
+    categorias: [
+      { nombre: "Trabajador no calificado", basico: 853153.46 },
+      { nombre: "Trabajador semi calificado", basico: 890122.69 },
+      { nombre: "Trabajador calificado", basico: 954755.48 },
+      { nombre: "Especializado", basico: 1014723.81 },
+      { nombre: "Capataz", basico: 1039006.3 },
+      { nombre: "Encargado", basico: 1050855.46 },
+      { nombre: "Supervisor", basico: 1033977.76 },
+    ],
+  },
+  {
+    nombre: "Lavaderos de Verduras",
+    categorias: [
+      { nombre: "Peón general", basico: 1071383.93 },
+      { nombre: "Jornal diario", basico: 48692.87 },
+      { nombre: "Conductor tractorista / motoelevador", basico: 1121599.35 },
+      { nombre: "Encargado", basico: 1323702.06 },
+    ],
+  },
+  {
+    nombre: "Arreos y Remates en Ferias",
+    categorias: [
+      { nombre: "Peón general mensualizado", basico: 848043.94 },
+      { nombre: "Capataz con caballo (por día)", basico: 101075.56 },
+      { nombre: "Peón con caballo (por día)", basico: 79418.22 },
+    ],
+  },
+];
 
 document.addEventListener("DOMContentLoaded", () => {
   checkActivation();
-
-  const activateBtn = document.getElementById("activateBtn");
-  if (activateBtn) {
-    activateBtn.addEventListener("click", validarPin);
-  }
-
-  const accessPinInput = document.getElementById("accessPin");
-  if (accessPinInput) {
-    accessPinInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") validarPin();
-    });
-  }
-
-  const form = document.getElementById("calcForm");
-  if (form) {
-    form.addEventListener("submit", calcularIndemnizacion);
-  }
-
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker
-      .register("./sw.js")
-      .then((reg) => {
-        reg.update();
-      })
-      .catch((err) => console.log("SW error:", err));
-  }
+  initListeners();
+  setupLogoSecret();
+  pobladorSelectorActividades();
 });
 
-function checkActivation() {
-  const isActivated = localStorage.getItem("app_activated_v2");
-  const lockOverlay = document.getElementById("activationScreen");
+function initListeners() {
+  document.getElementById("activateBtn").addEventListener("click", validarPin);
+  document
+    .getElementById("calcForm")
+    .addEventListener("submit", calcularIndemnizacion);
+  document
+    .getElementById("addCategoriaBtn")
+    .addEventListener("click", () => agregarFilaCategoria());
+  document
+    .getElementById("addTramoBtn")
+    .addEventListener("click", () => agregarFilaTramo());
+  document
+    .getElementById("paritariasForm")
+    .addEventListener("submit", guardarYCalcularGrilla);
+  document
+    .getElementById("downloadDocxBtn")
+    .addEventListener("click", generarDocumentoWord);
+  document
+    .getElementById("sendEmailBtn")
+    .addEventListener("click", enviarEmailDirecto);
+  document
+    .getElementById("selectHistorial")
+    .addEventListener("change", cargarDatosActividadSeleccionada);
 
-  if (isActivated === "true" && lockOverlay) {
-    lockOverlay.classList.add("hidden");
-  } else if (lockOverlay) {
-    lockOverlay.classList.remove("hidden");
-  }
+  const navCalc = document.getElementById("navCalcBtn");
+  const navPari = document.getElementById("navParitariasBtn");
+  if (navCalc)
+    navCalc.addEventListener("click", () => switchView("calcView", navCalc));
+  if (navPari)
+    navPari.addEventListener("click", () =>
+      switchView("paritariasView", navPari),
+    );
+}
+
+// --- TRUCO TRIPLE CLIC EN LOGO UATRE ---
+function setupLogoSecret() {
+  const logo = document.querySelector(".delegacion-logo");
+  if (!logo) return;
+
+  logo.addEventListener("click", () => {
+    logoClicks++;
+    if (logoClicks === 3) {
+      clearTimeout(logoClickTimer);
+      logoClicks = 0;
+      let pass = prompt("Acceso Administrador (Delegación Córdoba):");
+      if (pass && pass.trim().toLowerCase() === ADMIN_PIN) {
+        currentUserRole = "admin";
+        localStorage.setItem("user_role", "admin");
+        unlockApp();
+        alert("¡Modo Administrador Activado!");
+      } else if (pass !== null) {
+        alert("Contraseña incorrecta.");
+      }
+    }
+    clearTimeout(logoClickTimer);
+    logoClickTimer = setTimeout(() => {
+      logoClicks = 0;
+    }, 1500);
+  });
 }
 
 function validarPin() {
-  const inputPin = document
-    .getElementById("accessPin")
-    .value.trim()
-    .toLowerCase();
-  const lockOverlay = document.getElementById("activationScreen");
-  const errorMsg = document.getElementById("activationError");
-
-  if (inputPin === ACTIVATION_PIN) {
-    localStorage.setItem("app_activated_v2", "true");
-    if (errorMsg) errorMsg.classList.add("hidden");
-    if (lockOverlay) lockOverlay.classList.add("hidden");
+  const pin = document.getElementById("accessPin").value.trim().toLowerCase();
+  if (pin === ADMIN_PIN) {
+    currentUserRole = "admin";
+    localStorage.setItem("user_role", "admin");
+    unlockApp();
+  } else if (pin === USER_PIN) {
+    currentUserRole = "user";
+    localStorage.setItem("user_role", "user");
+    unlockApp();
   } else {
-    if (errorMsg) {
-      errorMsg.classList.remove("hidden");
-      errorMsg.textContent = "Contraseña incorrecta. Intente nuevamente.";
-    }
+    document.getElementById("activationError").classList.remove("hidden");
   }
+}
+
+function unlockApp() {
+  document.getElementById("activationScreen").classList.add("hidden");
+  if (currentUserRole === "admin") {
+    const adminNav = document.getElementById("adminNav");
+    if (adminNav) adminNav.classList.remove("hidden");
+    cargarHistorialNube();
+  }
+}
+
+function checkActivation() {
+  const role = localStorage.getItem("user_role");
+  if (role) {
+    currentUserRole = role;
+    unlockApp();
+  }
+}
+
+function switchView(viewId, btnActive) {
+  document
+    .querySelectorAll(".app-view")
+    .forEach((v) => v.classList.add("hidden"));
+  document.getElementById(viewId).classList.remove("hidden");
+  document
+    .querySelectorAll(".nav-btn")
+    .forEach((b) => b.classList.remove("active"));
+  if (btnActive) btnActive.classList.add("active");
+}
+
+// --- POBLAR SELECTOR DINETE Y LIMPIO ---
+function pobladorSelectorActividades() {
+  const select = document.getElementById("selectHistorial");
+  select.innerHTML = '<option value="nueva">Crear Nueva Actividad...</option>';
+
+  ACTIVIDADES_PRECARGADAS.forEach((act, idx) => {
+    const opt = document.createElement("option");
+    opt.value = `pre_${idx}`;
+    opt.text = act.nombre;
+    select.add(opt);
+  });
+}
+
+function cargarDatosActividadSeleccionada() {
+  const val = document.getElementById("selectHistorial").value;
+  const containerCat = document.getElementById("categoriasContainer");
+  const containerTram = document.getElementById("tramosContainer");
+  containerCat.innerHTML = "";
+  containerTram.innerHTML = "";
+
+  if (val.startsWith("pre_")) {
+    const idx = parseInt(val.replace("pre_", ""));
+    const act = ACTIVIDADES_PRECARGADAS[idx];
+    document.getElementById("actividadNombre").value = act.nombre;
+
+    act.categorias.forEach((cat) => {
+      agregarFilaCategoria(cat.nombre, cat.basico);
+    });
+    agregarFilaTramo();
+  } else if (val === "nueva") {
+    document.getElementById("actividadNombre").value = "";
+    agregarFilaCategoria();
+    agregarFilaTramo();
+  }
+}
+
+function agregarFilaCategoria(nombre = "", basico = "") {
+  const container = document.getElementById("categoriasContainer");
+  const div = document.createElement("div");
+  div.className = "categoria-row";
+  div.style.cssText =
+    "display:flex; gap:10px; margin-bottom:8px; align-items:center;";
+  div.innerHTML = `
+    <input type="text" placeholder="Categoría" class="cat-nombre" value="${nombre}" style="width:55%" required> 
+    <input type="number" step="0.01" placeholder="Básico ($)" class="cat-basico" value="${basico}" style="width:35%" required>
+    <button type="button" onclick="this.parentElement.remove()" style="width:10%; background:#ef4444; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer;">🗑️</button>
+  `;
+  container.appendChild(div);
+}
+
+function agregarFilaTramo(pct = "", det = "") {
+  const container = document.getElementById("tramosContainer");
+  const div = document.createElement("div");
+  div.className = "tramo-row";
+  div.style.cssText =
+    "display:flex; gap:10px; margin-bottom:8px; align-items:center;";
+  div.innerHTML = `
+    <input type="number" step="0.1" placeholder="Aumento % (0 = Congelado)" class="tramo-porcentaje" value="${pct !== "" ? pct : ""}" style="width:40%"> 
+    <input type="text" placeholder="Mes / Detalle" class="tramo-detalle" value="${det}" style="width:50%">
+    <button type="button" onclick="this.parentElement.remove()" style="width:10%; background:#ef4444; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer;" title="Eliminar este mes">🗑️</button>
+  `;
+  container.appendChild(div);
+}
+
+// --- HISTORIAL DESDE LA NUBE (FILTRADO AUTOMÁTICO DE NOMBRES LARGOS) ---
+async function cargarHistorialNube() {
+  try {
+    const select = document.getElementById("selectHistorial");
+    const snapshot = await db
+      .collection("paritarias")
+      .orderBy("fechaGuardado", "desc")
+      .get();
+
+    const nombresExistentes = new Set();
+    Array.from(select.options).forEach((opt) =>
+      nombresExistentes.add(opt.text.trim().toLowerCase()),
+    );
+
+    snapshot.forEach((doc) => {
+      const data = doc.data();
+      if (!data.actividad) return;
+
+      // FILTRO: Limpia [Nube], resoluciones, fechas y agregados molestos
+      let nombreLimpio = data.actividad
+        .replace(/\[Nube\]/gi, "")
+        .replace(/\(Res\..*?\)/gi, "")
+        .replace(/\(\d{4}-.*?\)/gi, "")
+        .replace(/- Desyuyada/gi, "")
+        .trim();
+
+      if (nombreLimpio.endsWith("-"))
+        nombreLimpio = nombreLimpio.slice(0, -1).trim();
+
+      if (!nombresExistentes.has(nombreLimpio.toLowerCase())) {
+        nombresExistentes.add(nombreLimpio.toLowerCase());
+
+        const option = document.createElement("option");
+        option.value = doc.id;
+        option.text = nombreLimpio; // Muestra solo el nombre 100% limpio
+        select.add(option);
+      }
+    });
+  } catch (e) {
+    console.error("Error al obtener historial de la nube: ", e);
+  }
+}
+
+// --- CÁLCULO, FIREBASE Y MAIL ---
+async function guardarYCalcularGrilla(e) {
+  e.preventDefault();
+  const actividadNombre = document.getElementById("actividadNombre").value;
+  const mesInicio = document.getElementById("mesInicio").value;
+
+  const catNombres = document.querySelectorAll(".cat-nombre");
+  const catBasicos = document.querySelectorAll(".cat-basico");
+  let categoriasBase = [];
+  catNombres.forEach((input, i) => {
+    if (input.value.trim() !== "") {
+      categoriasBase.push({
+        nombre: input.value.trim(),
+        basico: parseFloat(catBasicos[i].value) || 0,
+      });
+    }
+  });
+
+  const tramoPct = document.querySelectorAll(".tramo-porcentaje");
+  const tramoDet = document.querySelectorAll(".tramo-detalle");
+  let tramos = [];
+  tramoPct.forEach((input, i) => {
+    let pctVal = input.value === "" ? 0 : parseFloat(input.value);
+    tramos.push({
+      porcentaje: pctVal,
+      detalle: tramoDet[i].value || `Mes ${i + 1}`,
+    });
+  });
+
+  if (categoriasBase.length === 0) {
+    alert("Cargá al menos una categoría profesional.");
+    return;
+  }
+
+  let grillaCalculada = [];
+  categoriasBase.forEach((cat) => {
+    let evolucion = [cat.basico];
+    let acumulado = cat.basico;
+    tramos.forEach((t) => {
+      acumulado = acumulado * (1 + t.porcentaje / 100);
+      evolucion.push(acumulado);
+    });
+    grillaCalculada.push({
+      categoria: cat.nombre,
+      valores: evolucion,
+    });
+  });
+
+  ultimaGrillaCalculada = grillaCalculada;
+  ultimosTramos = tramos;
+
+  try {
+    await db.collection("paritarias").add({
+      actividad: actividadNombre,
+      mesInicio: mesInicio,
+      categoriasBase: categoriasBase,
+      tramos: tramos,
+      grillaCalculada: grillaCalculada,
+      fechaGuardado: new Date().toISOString(),
+    });
+
+    renderTablaGrilla(grillaCalculada, tramos);
+    alert("¡Escala guardada en la Nube con éxito!");
+
+    enviarEmailDirecto();
+  } catch (err) {
+    alert("Error al guardar en la nube: " + err.message);
+  }
+}
+
+function renderTablaGrilla(grilla, tramos) {
+  const theadTr = document.getElementById("escalaTableHead");
+  const tbody = document.querySelector("#escalaTable tbody");
+
+  let headHtml = "<th>Categoría Profesional</th><th>Base Inicial ($)</th>";
+  tramos.forEach((t) => {
+    headHtml += `<th>${t.detalle} (+${t.porcentaje}%)</th>`;
+  });
+  theadTr.innerHTML = headHtml;
+
+  let bodyHtml = "";
+  grilla.forEach((row) => {
+    bodyHtml += `<tr><td><strong>${row.categoria}</strong></td>`;
+    row.valores.forEach((val) => {
+      bodyHtml += `<td>$${val.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>`;
+    });
+    bodyHtml += "</tr>";
+  });
+
+  tbody.innerHTML = bodyHtml;
+  document.getElementById("paritariasResults").classList.remove("hidden");
+}
+
+function enviarEmailDirecto() {
+  const actividad =
+    document.getElementById("actividadNombre").value || "Actividad Rural";
+  const mesInicio = document.getElementById("mesInicio").value || "S/D";
+
+  let cuerpo = `DELEGACIÓN CÓRDOBA CAPITAL - UATRE\n`;
+  cuerpo += `REPORTE DE ESCALA SALARIAL: ${actividad}\n`;
+  cuerpo += `Mes de Inicio: ${mesInicio}\n\n`;
+  cuerpo += `GRILLA SALARIAL CALCULADA:\n`;
+  cuerpo += `--------------------------------------------------\n`;
+
+  ultimaGrillaCalculada.forEach((row) => {
+    cuerpo += `• ${row.categoria}:\n`;
+    cuerpo += `  - Base inicial: $${row.valores[0].toFixed(2)}\n`;
+    ultimosTramos.forEach((t, idx) => {
+      cuerpo += `  - ${t.detalle} (+${t.porcentaje}%): $${row.valores[idx + 1].toFixed(2)}\n`;
+    });
+    cuerpo += `--------------------------------------------------\n`;
+  });
+
+  const mailtoUrl = `mailto:${DESTINATARIO_MAIL}?subject=${encodeURIComponent("Escala Salarial: " + actividad)}&body=${encodeURIComponent(cuerpo)}`;
+  window.location.href = mailtoUrl;
+}
+
+function generarDocumentoWord() {
+  const {
+    Document,
+    Packer,
+    Paragraph,
+    TextRun,
+    Table,
+    TableRow,
+    TableCell,
+    WidthType,
+  } = docx;
+  const actividad =
+    document.getElementById("actividadNombre").value || "General";
+
+  let tableHeaderCells = [
+    new TableCell({
+      children: [
+        new Paragraph({
+          children: [
+            new TextRun({ text: "Categoría Profesional", bold: true }),
+          ],
+        }),
+      ],
+    }),
+    new TableCell({
+      children: [
+        new Paragraph({
+          children: [new TextRun({ text: "Base Inicial ($)", bold: true })],
+        }),
+      ],
+    }),
+  ];
+
+  ultimosTramos.forEach((t) => {
+    tableHeaderCells.push(
+      new TableCell({
+        children: [
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `${t.detalle} (+${t.porcentaje}%)`,
+                bold: true,
+              }),
+            ],
+          }),
+        ],
+      }),
+    );
+  });
+
+  let tableRows = [new TableRow({ children: tableHeaderCells })];
+
+  ultimaGrillaCalculada.forEach((row) => {
+    let rowCells = [
+      new TableCell({ children: [new Paragraph(row.categoria)] }),
+    ];
+    row.valores.forEach((val) => {
+      rowCells.push(
+        new TableCell({ children: [new Paragraph(`$${val.toFixed(2)}`)] }),
+      );
+    });
+    tableRows.push(new TableRow({ children: rowCells }));
+  });
+
+  const doc = new Document({
+    sections: [
+      {
+        children: [
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: "DELEGACIÓN CÓRDOBA CAPITAL - UATRE",
+                bold: true,
+                size: 28,
+                color: "10B981",
+              }),
+            ],
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: "Reporte de Escala Salarial Paritaria: " + actividad,
+                bold: true,
+                size: 22,
+              }),
+            ],
+          }),
+          new Paragraph({ text: "" }),
+          new Table({
+            rows: tableRows,
+            width: { size: 100, type: WidthType.PERCENTAGE },
+          }),
+        ],
+      },
+    ],
+  });
+
+  Packer.toBlob(doc).then((blob) => saveAs(blob, `Escala_${actividad}.docx`));
 }
 
 function calcularIndemnizacion(e) {
   e.preventDefault();
+  const salary = parseFloat(document.getElementById("salary").value) || 0;
+  const startDateInput = document.getElementById("startDate").value;
+  const endDateInput = document.getElementById("endDate").value;
+  const notice = document.getElementById("notice").value;
+  const vacation2025 = document.getElementById("vacation2025").value;
 
-  const sueldoBase = parseFloat(document.getElementById("salary").value) || 0;
-  const fechaIngresoStr = document.getElementById("startDate").value;
-  const fechaEgresoStr = document.getElementById("endDate").value;
-  const recibioPreaviso = document.getElementById("notice").value === "si";
-  const vacationSelect = document.getElementById("vacation2025");
-  const gozoVacacionesAnioAnterior = vacationSelect
-    ? vacationSelect.value === "si"
-    : true;
-
-  if (!fechaIngresoStr || !fechaEgresoStr || sueldoBase <= 0) {
-    alert("Por favor, ingrese fechas válidas y un sueldo base mayor a cero.");
+  if (!startDateInput || !endDateInput || salary <= 0) {
+    alert("Por favor completá el sueldo y las fechas correctamente.");
     return;
   }
 
-  const [fIAnio, fIMes, fIDia] = fechaIngresoStr.split("-").map(Number);
-  const [fEAnio, fEMes, fEDia] = fechaEgresoStr.split("-").map(Number);
+  const startDate = new Date(startDateInput + "T00:00:00");
+  const endDate = new Date(endDateInput + "T00:00:00");
 
-  const fechaIngreso = new Date(fIAnio, fIMes - 1, fIDia);
-  const fechaEgreso = new Date(fEAnio, fEMes - 1, fEDia);
+  let diffDays = (endDate - startDate) / (1000 * 60 * 60 * 24);
+  let years = Math.floor(diffDays / 365);
+  let remDays = diffDays % 365;
 
-  if (fechaEgreso <= fechaIngreso) {
-    alert("La fecha de egreso debe ser posterior a la fecha de ingreso.");
-    return;
-  }
+  let seniorityYears = years;
+  if (remDays >= 90) seniorityYears += 1;
+  if (seniorityYears === 0) seniorityYears = 1;
 
-  const ultimoDiaMesCalendario = new Date(fEAnio, fEMes, 0).getDate();
-  const esUltimoDiaDelMes = fEDia === ultimoDiaMesCalendario;
-  const diasTrabajadosMes = esUltimoDiaDelMes ? 30 : Math.min(fEDia, 30);
+  const indAntiguedad = salary * seniorityYears;
 
-  const tiempoTrabajado = calcularAntiguedad(fechaIngreso, fechaEgreso);
-  const periodos245 = calcularPeriodos245(fechaIngreso, fechaEgreso);
+  let indPreaviso = 0,
+    SACPreaviso = 0,
+    integracionMes = 0,
+    SACIntegracion = 0;
+  if (notice === "no") {
+    let mesesPreaviso = seniorityYears > 5 ? 2 : 1;
+    indPreaviso = salary * mesesPreaviso;
+    SACPreaviso = indPreaviso / 12;
 
-  // 1. Indemnización por Antigüedad
-  const montoAntiguedad = sueldoBase * periodos245;
-
-  // 2. Preaviso
-  let diasPreaviso = 0;
-  if (!recibioPreaviso) {
-    diasPreaviso = tiempoTrabajado.anios < 5 ? 30 : 60;
-  }
-  const montoPreaviso = (sueldoBase / 30) * diasPreaviso;
-  const sacSobrePreaviso = montoPreaviso / 12;
-
-  // 3. Integración Mes de Despido
-  let montoIntegracion = 0;
-  let sacSobreIntegracion = 0;
-  let diasIntegracion = 0;
-
-  if (!recibioPreaviso && !esUltimoDiaDelMes) {
-    diasIntegracion = 30 - diasTrabajadosMes;
-    if (diasIntegracion > 0) {
-      montoIntegracion = (sueldoBase / 30) * diasIntegracion;
-      sacSobreIntegracion = montoIntegracion / 12;
+    let dayOfEgreso = endDate.getDate();
+    if (dayOfEgreso < 30) {
+      let diasFaltantes = 30 - dayOfEgreso;
+      integracionMes = (salary / 30) * diasFaltantes;
+      SACIntegracion = integracionMes / 12;
     }
   }
 
-  // 4. Días trabajados del mes
-  const montoDiasMes = (sueldoBase / 30) * diasTrabajadosMes;
+  let diasTrabajadosMes = endDate.getDate();
+  if (diasTrabajadosMes > 30) diasTrabajadosMes = 30;
+  const sueldoDobleProporcional = (salary / 30) * diasTrabajadosMes;
 
-  // 5. SAC Proporcional
-  const sacProporcional = calcularSACProporcional(fechaEgreso, sueldoBase);
+  let mesEgreso = endDate.getMonth();
+  let inicioSemestre =
+    mesEgreso >= 6
+      ? new Date(endDate.getFullYear(), 6, 1)
+      : new Date(endDate.getFullYear(), 0, 1);
+  let diasSemestre =
+    Math.floor((endDate - inicioSemestre) / (1000 * 60 * 60 * 24)) + 1;
+  const sacProporcional = (salary / 2) * (diasSemestre / 180);
 
-  // 6. Vacaciones No Gozadas Año En Curso (Proporcional)
-  const vacacionesEnCurso = calcularVacacionesNoGozadas(
-    fechaIngreso,
-    fechaEgreso,
-    sueldoBase,
-  );
+  let diasVacacionesDerecho = 14;
+  if (seniorityYears > 20) diasVacacionesDerecho = 35;
+  else if (seniorityYears > 10) diasVacacionesDerecho = 28;
+  else if (seniorityYears > 5) diasVacacionesDerecho = 21;
 
-  // 7. Vacaciones No Gozadas Año Anterior (Completo)
-  const vacacionesAnioAnterior = calcularVacacionesAnioAnterior(
-    fechaIngreso,
-    fechaEgreso,
-    sueldoBase,
-    gozoVacacionesAnioAnterior,
-  );
+  let diasAnoTrabajados =
+    Math.floor(
+      (endDate - new Date(endDate.getFullYear(), 0, 1)) / (1000 * 60 * 60 * 24),
+    ) + 1;
+  let diasVacacionesProp = (diasAnoTrabajados / 365) * diasVacacionesDerecho;
+  const vacProporcionales = (salary / 25) * diasVacacionesProp;
+  const sacSobreVacProporcionales = vacProporcionales / 12;
 
-  // Total Liquidación
-  const totalLiquidacion =
-    montoAntiguedad +
-    montoPreaviso +
-    sacSobrePreaviso +
-    montoIntegracion +
-    sacSobreIntegracion +
-    montoDiasMes +
+  let vacNoGozadas2025 = 0,
+    sacSobreVacNoGozadas = 0;
+  if (vacation2025 === "no") {
+    vacNoGozadas2025 = (salary / 25) * diasVacacionesDerecho;
+    sacSobreVacNoGozadas = vacNoGozadas2025 / 12;
+  }
+
+  const total =
+    indAntiguedad +
+    indPreaviso +
+    SACPreaviso +
+    integracionMes +
+    SACIntegracion +
+    sueldoDobleProporcional +
     sacProporcional +
-    vacacionesEnCurso.totalVacacionesYSac +
-    vacacionesAnioAnterior.totalVacacionesYSac;
+    vacProporcionales +
+    sacSobreVacProporcionales +
+    vacNoGozadas2025 +
+    sacSobreVacNoGozadas;
 
-  renderizarResultados({
-    diasTrabajadosMes,
-    montoAntiguedad,
-    montoPreaviso,
-    sacSobrePreaviso,
-    montoIntegracion,
-    sacSobreIntegracion,
-    diasIntegracion,
-    montoDiasMes,
-    sacProporcional,
-    vacacionesEnCurso,
-    vacacionesAnioAnterior,
-    totalLiquidacion,
-  });
-}
-
-function calcularAntiguedad(fInicio, fFin) {
-  let anios = fFin.getFullYear() - fInicio.getFullYear();
-  let meses = fFin.getMonth() - fInicio.getMonth();
-  let dias = fFin.getDate() - fInicio.getDate();
-
-  if (dias < 0) {
-    meses--;
-    const ultimoDiaMesAnterior = new Date(
-      fFin.getFullYear(),
-      fFin.getMonth(),
-      0,
-    ).getDate();
-    dias += ultimoDiaMesAnterior;
-  }
-  if (meses < 0) {
-    anios--;
-    meses += 12;
-  }
-  return { anios, meses, dias };
-}
-
-function calcularPeriodos245(fInicio, fFin) {
-  const anti = calcularAntiguedad(fInicio, fFin);
-  let periodos = anti.anios;
-  if (anti.meses > 3 || (anti.meses === 3 && anti.dias > 0)) {
-    periodos += 1;
-  }
-  return Math.max(periodos, 1);
-}
-
-function calcularSACProporcional(fEgreso, sueldoBase) {
-  const anio = fEgreso.getFullYear();
-  const mes = fEgreso.getMonth();
-
-  const inicioSemestre = mes < 6 ? new Date(anio, 0, 1) : new Date(anio, 6, 1);
-
-  const diffTiempo = fEgreso.getTime() - inicioSemestre.getTime();
-  const diasSemestre = Math.floor(diffTiempo / (1000 * 60 * 60 * 24)) + 1;
-
-  return ((sueldoBase / 2) * diasSemestre) / 182.5;
-}
-
-function calcularVacacionesNoGozadas(fIngreso, fEgreso, sueldoBase) {
-  const anti = calcularAntiguedad(fIngreso, fEgreso);
-  let diasVacacionesAnuales = 14;
-
-  if (anti.anios >= 20) diasVacacionesAnuales = 35;
-  else if (anti.anios >= 10) diasVacacionesAnuales = 28;
-  else if (anti.anios >= 5) diasVacacionesAnuales = 21;
-
-  const inicioAnio = new Date(fEgreso.getFullYear(), 0, 1);
-  const diffTiempo = fEgreso.getTime() - inicioAnio.getTime();
-  const diasTrabajadosEnAnio =
-    Math.floor(diffTiempo / (1000 * 60 * 60 * 24)) + 1;
-
-  const diasProporcionales =
-    (diasVacacionesAnuales * diasTrabajadosEnAnio) / 365;
-  const valorDiaVacaciones = sueldoBase / 25;
-  const montoVacaciones = valorDiaVacaciones * diasProporcionales;
-  const sacSobreVacaciones = montoVacaciones / 12;
-
-  return {
-    diasProporcionales: diasProporcionales.toFixed(2),
-    montoVacaciones,
-    sacSobreVacaciones,
-    totalVacacionesYSac: montoVacaciones + sacSobreVacaciones,
-  };
-}
-
-function calcularVacacionesAnioAnterior(
-  fIngreso,
-  fEgreso,
-  sueldoBase,
-  gozoVacacionesAnioAnterior,
-) {
-  if (gozoVacacionesAnioAnterior) {
-    return {
-      dias: 0,
-      montoVacaciones: 0,
-      sacSobreVacaciones: 0,
-      totalVacacionesYSac: 0,
-    };
-  }
-
-  const anioAnterior = fEgreso.getFullYear() - 1;
-  const finAnioAnterior = new Date(anioAnterior, 11, 31);
-
-  if (fIngreso > finAnioAnterior) {
-    return {
-      dias: 0,
-      montoVacaciones: 0,
-      sacSobreVacaciones: 0,
-      totalVacacionesYSac: 0,
-    };
-  }
-
-  const antiAnioAnterior = calcularAntiguedad(fIngreso, finAnioAnterior);
-  let diasVacacionesAnuales = 14;
-
-  if (antiAnioAnterior.anios >= 20) diasVacacionesAnuales = 35;
-  else if (antiAnioAnterior.anios >= 10) diasVacacionesAnuales = 28;
-  else if (antiAnioAnterior.anios >= 5) diasVacacionesAnuales = 21;
-
-  const valorDiaVacaciones = sueldoBase / 25;
-  const montoVacaciones = valorDiaVacaciones * diasVacacionesAnuales;
-  const sacSobreVacaciones = montoVacaciones / 12;
-
-  return {
-    dias: diasVacacionesAnuales,
-    montoVacaciones,
-    sacSobreVacaciones,
-    totalVacacionesYSac: montoVacaciones + sacSobreVacaciones,
-  };
-}
-
-function formatMoneda(monto) {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    minimumFractionDigits: 2,
-  }).format(monto);
-}
-
-function renderizarResultados(datos) {
-  const resultsCard = document.getElementById("results");
   const tbody = document.querySelector("#resultsTable tbody");
-  const totalSpan = document.getElementById("totalAmount");
+  tbody.innerHTML = `
+    <tr><td>Indemnización por Antigüedad (${seniorityYears} año/s)</td><td>$${indAntiguedad.toFixed(2)}</td></tr>
+    ${indPreaviso > 0 ? `<tr><td>Indemnización Sustitutiva de Preaviso</td><td>$${indPreaviso.toFixed(2)}</td></tr>` : ""}
+    ${SACPreaviso > 0 ? `<tr><td>SAC s/ Preaviso</td><td>$${SACPreaviso.toFixed(2)}</td></tr>` : ""}
+    ${integracionMes > 0 ? `<tr><td>Integración Mes de Despido</td><td>$${integracionMes.toFixed(2)}</td></tr>` : ""}
+    ${SACIntegracion > 0 ? `<tr><td>SAC s/ Integración Mes de Despido</td><td>$${SACIntegracion.toFixed(2)}</td></tr>` : ""}
+    <tr><td>Días Trabajados Mes de Egreso (${diasTrabajadosMes} días)</td><td>$${sueldoDobleProporcional.toFixed(2)}</td></tr>
+    <tr><td>SAC Proporcional</td><td>$${sacProporcional.toFixed(2)}</td></tr>
+    <tr><td>Vacaciones Proporcionales</td><td>$${vacProporcionales.toFixed(2)}</td></tr>
+    <tr><td>SAC s/ Vacaciones Proporcionales</td><td>$${sacSobreVacProporcionales.toFixed(2)}</td></tr>
+    ${vacNoGozadas2025 > 0 ? `<tr><td>Vacaciones No Gozadas Año Anterior</td><td>$${vacNoGozadas2025.toFixed(2)}</td></tr>` : ""}
+    ${sacSobreVacNoGozadas > 0 ? `<tr><td>SAC s/ Vacaciones No Gozadas</td><td>$${sacSobreVacNoGozadas.toFixed(2)}</td></tr>` : ""}
+  `;
 
-  if (!tbody || !resultsCard || !totalSpan) return;
-
-  const filas = [
-    {
-      concepto: "Indemnización por Antigüedad (Art. 245)",
-      monto: datos.montoAntiguedad,
-    },
-    {
-      concepto: "Indemnización Sustitutiva de Preaviso",
-      monto: datos.montoPreaviso,
-    },
-    { concepto: "SAC sobre Preaviso", monto: datos.sacSobrePreaviso },
-    {
-      concepto: `Integración Mes de Despido (${datos.diasIntegracion} días)`,
-      monto: datos.montoIntegracion,
-    },
-    { concepto: "SAC sobre Integración", monto: datos.sacSobreIntegracion },
-    {
-      concepto: `Días Trabajados del Mes (${datos.diasTrabajadosMes} días)`,
-      monto: datos.montoDiasMes,
-    },
-    { concepto: "SAC Proporcional", monto: datos.sacProporcional },
-    {
-      concepto: `Vacaciones No Gozadas Año en Curso (${datos.vacacionesEnCurso.diasProporcionales} días)`,
-      monto: datos.vacacionesEnCurso.montoVacaciones,
-    },
-    {
-      concepto: "SAC sobre Vacaciones Año en Curso",
-      monto: datos.vacacionesEnCurso.sacSobreVacaciones,
-    },
-    {
-      concepto: `Vacaciones No Gozadas Año Anterior Adeudadas (${datos.vacacionesAnioAnterior.dias} días)`,
-      monto: datos.vacacionesAnioAnterior.montoVacaciones,
-    },
-    {
-      concepto: "SAC sobre Vacaciones Año Anterior Adeudadas",
-      monto: datos.vacacionesAnioAnterior.sacSobreVacaciones,
-    },
-  ];
-
-  tbody.innerHTML = "";
-  filas.forEach((f) => {
-    if (f.monto > 0) {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${f.concepto}</td><td>${formatMoneda(f.monto)}</td>`;
-      tbody.appendChild(tr);
-    }
-  });
-
-  totalSpan.textContent = formatMoneda(datos.totalLiquidacion)
-    .replace("$", "")
-    .trim();
-  resultsCard.classList.remove("hidden");
-  resultsCard.scrollIntoView({ behavior: "smooth" });
+  document.getElementById("totalAmount").textContent = total.toLocaleString(
+    "es-AR",
+    { minimumFractionDigits: 2, maximumFractionDigits: 2 },
+  );
+  document.getElementById("results").classList.remove("hidden");
 }
