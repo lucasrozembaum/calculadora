@@ -3,248 +3,400 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Calculadora Rural & Gestión Paritaria</title>
-    <link rel="stylesheet" href="styles.css" />
-    <link rel="manifest" href="manifest.json" />
-    <meta name="theme-color" content="#10b981" />
+    <title>Calculadora Rural & Gestión Paritaria - UATRE Córdoba</title>
 
-    <!-- LIBRERÍAS DE EXPORTACIÓN Y FIREBASE -->
-    <script src="https://unpkg.com/docx@7.8.2/build/index.js"></script>
+    <link rel="stylesheet" href="styles.css" />
+
+    <!-- Carga de Librerías -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://unpkg.com/docx@7.1.0/build/index.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   </head>
   <body>
-    <!-- PANTALLA DE ACTIVACIÓN / LOGIN CON CLAVE -->
-    <div id="activationScreen" class="lock-overlay">
-      <div class="lock-card">
-        <h2>Activación de App</h2>
-        <p>Ingresá tu contraseña de acceso para habilitar la aplicación:</p>
-        <input
-          type="password"
-          id="accessPin"
-          placeholder="Contraseña de acceso"
-          maxlength="30"
-        />
-        <button id="activateBtn" type="button">Activar Aplicación</button>
-        <p id="activationError" class="error-msg hidden">
-          Contraseña incorrecta.
+    <!-- PANTALLA DE ACTIVACIÓN / LOGIN -->
+    <div id="activationScreen" class="activation-overlay">
+      <div class="activation-card">
+        <div
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 10px;
+          "
+        >
+          <img
+            src="logo.png"
+            alt="UATRE Logo"
+            class="delegacion-logo secret-logo"
+            style="height: 45px; width: auto"
+            title="UATRE"
+          />
+          <h2 style="margin: 0; font-size: 1.3rem">
+            UATRE — Delegación Córdoba Capital
+          </h2>
+        </div>
+        <p style="color: #6b7280; font-size: 0.9rem">
+          Sistema de Gestión Paritaria y Liquidación Rural
+        </p>
+
+        <div class="form-group" style="margin-top: 20px">
+          <label for="accessPin">🔑 Ingresá tu PIN de Acceso:</label>
+          <input
+            type="password"
+            id="accessPin"
+            class="form-control"
+            placeholder="PIN de Seguridad..."
+          />
+        </div>
+
+        <button
+          id="activateBtn"
+          class="btn-primary btn-full"
+          style="margin-top: 15px"
+        >
+          Ingresar al Sistema
+        </button>
+        <p
+          id="activationError"
+          class="error-msg hidden"
+          style="color: #ef4444; margin-top: 10px"
+        >
+          PIN Incorrecto. Verificá los datos.
         </p>
       </div>
     </div>
 
-    <!-- APLICACIÓN PRINCIPAL -->
-    <div class="calculator-container">
-      <div class="header-bar">
-        <div class="brand-container">
-          <img
-            src="logo.png"
-            alt="Logo Delegación"
-            class="delegacion-logo"
-            onerror="this.style.display = 'none'"
-          />
-          <div>
-            <h2>Calculadora de Indemnizaciones Rurales</h2>
-            <span class="sub-title">Delegación Córdoba Capital</span>
-          </div>
-        </div>
-        <button id="reportBtn" type="button" class="btn-secondary">
-          📊 Uso Mensual
-        </button>
-      </div>
-
-      <!-- BARRA DE NAVEGACIÓN PRIVADA (Solo visible para Administrador) -->
-      <nav id="adminNav" class="admin-nav hidden">
-        <button id="navCalcBtn" type="button" class="nav-btn active">
-          🧮 Calculadora
-        </button>
-        <button id="navParitariasBtn" type="button" class="nav-btn">
-          📊 Escalas Paritarias
-        </button>
-      </nav>
-
-      <!-- VISTA 1: CALCULADORA PÚBLICA -->
-      <div id="calcView" class="app-view">
-        <form id="calcForm">
-          <div class="form-group">
-            <label for="salary">Mejor Remuneración Mensual ($):</label>
-            <input
-              type="number"
-              id="salary"
-              placeholder="Ej: 650000"
-              required
+    <!-- APLICACIÓN PRINCIPAL (OCULTA HASTA INGRESAR PIN) -->
+    <div id="mainApp" class="hidden">
+      <header class="app-header">
+        <div
+          class="header-content"
+          style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          "
+        >
+          <!-- LOGO Y TÍTULO AL LADO EN LA MISMA LÍNEA -->
+          <div
+            class="header-title"
+            style="display: flex; align-items: center; gap: 15px"
+          >
+            <img
+              src="logo.png"
+              alt="UATRE Logo"
+              class="delegacion-logo"
+              style="height: 50px; width: auto"
             />
+            <div>
+              <h1 style="margin: 0; font-size: 1.4rem; line-height: 1.2">
+                UATRE — Delegación Córdoba Capital
+              </h1>
+              <p
+                id="subtituloAdmin"
+                class="hidden"
+                style="
+                  margin: 0;
+                  color: #10b981;
+                  font-size: 0.85rem;
+                  font-weight: bold;
+                "
+              >
+                Comisión Asesora Regional N° 5
+              </p>
+            </div>
           </div>
 
-          <div class="form-group">
-            <label for="startDate">Fecha de Ingreso:</label>
-            <input type="date" id="startDate" required />
-          </div>
-
-          <div class="form-group">
-            <label for="endDate">Fecha de Egreso:</label>
-            <input type="date" id="endDate" required />
-          </div>
-
-          <div class="form-group">
-            <label for="notice">¿Recibió Preaviso?</label>
-            <select id="notice">
-              <option value="no">No</option>
-              <option value="si">Sí</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="vacation2025"
-              >¿Gozó las vacaciones del año anterior?</label
+          <div class="header-actions">
+            <button
+              id="reportBtn"
+              class="btn-secondary hidden"
+              title="Ver estadísticas de uso"
             >
-            <select id="vacation2025">
-              <option value="si">Sí (Ya gozadas)</option>
-              <option value="no">No (Adeudadas)</option>
-            </select>
-          </div>
-
-          <button type="submit" id="submitBtn">Calcular Liquidación</button>
-        </form>
-
-        <div id="results" class="results-card hidden">
-          <h3>Resumen de Liquidación</h3>
-          <div class="table-responsive">
-            <table id="resultsTable">
-              <thead>
-                <tr>
-                  <th>Concepto</th>
-                  <th>Monto ($)</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-          <div class="total-box">
-            <strong>Total Estimado: $<span id="totalAmount">0.00</span></strong>
+              📊 Uso Mensual
+            </button>
           </div>
         </div>
-      </div>
 
-      <!-- VISTA 2: GESTIÓN DE PARITARIAS Y TABLAS (Privado Admin) -->
-      <div id="paritariasView" class="app-view hidden">
-        <div class="paritarias-card">
-          <h3>Seguimiento de Escalas Salariales (CAR 5)</h3>
-          <p class="section-desc">
-            Seleccioná una actividad existente o creá una nueva con todas sus
-            categorías.
-          </p>
+        <!-- Menú de Navegación Exclusivo Admin -->
+        <nav id="adminNav" class="nav-bar hidden" style="margin-top: 15px">
+          <button id="navCalcBtn" class="nav-btn active">
+            🧮 Calculadora de Indemnizaciones
+          </button>
+          <button id="navParitariasBtn" class="nav-btn">
+            📜 Paritarias & Grillas CAR 5
+          </button>
+        </nav>
+      </header>
 
-          <!-- SELECCIÓN DE HISTORIAL Y PRECARGADOS -->
-          <div class="form-group cloud-history-box">
-            <label for="selectHistorial"
-              >📂 Seleccionar o Cargar Actividad:</label
-            >
-            <select id="selectHistorial">
-              <option value="nueva">➕ Crear Nueva Actividad...</option>
-            </select>
-          </div>
+      <main class="container">
+        <!-- VISTA 1: CALCULADORA DE INDEMNIZACIONES -->
+        <section id="calcView" class="app-view">
+          <div class="card">
+            <h2>🧮 Cálculo de Liquidación Final e Indemnización</h2>
+            <p class="subtitle">Régimen de Trabajo Agrario (Ley N° 26.727)</p>
 
-          <form id="paritariasForm">
-            <div class="form-group">
-              <label for="actividadNombre"
-                >Nombre de la Actividad / Convenio:</label
+            <form id="calcForm">
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="salary"
+                    >💵 Mejor Remuneración Mensual ($ ARS):</label
+                  >
+                  <input
+                    type="number"
+                    step="0.01"
+                    id="salary"
+                    class="form-control"
+                    placeholder="Ej: 1153237.67"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="startDate">📅 Fecha de Ingreso:</label>
+                  <input
+                    type="date"
+                    id="startDate"
+                    class="form-control"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="endDate">📅 Fecha de Egreso / Despido:</label>
+                  <input
+                    type="date"
+                    id="endDate"
+                    class="form-control"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="notice">📢 ¿Hubo Preaviso Otorgado?:</label>
+                  <select id="notice" class="form-control">
+                    <option value="no">
+                      No (Corresponde Indemnización por Preaviso)
+                    </option>
+                    <option value="yes">Sí (Otorgado en tiempo y forma)</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="vacation2025"
+                    >🏖️ ¿Gozó Vacaciones del Año Anterior?:</label
+                  >
+                  <select id="vacation2025" class="form-control">
+                    <option value="yes">Sí (Gozadas)</option>
+                    <option value="no">
+                      No (Liquidación de Vacaciones No Gozadas)
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                class="btn-primary btn-full"
+                style="margin-top: 20px"
               >
-              <input
-                type="text"
-                id="actividadNombre"
-                placeholder="Ej: Viveros y Floricultura (Res. 43/2026)"
-                required
-              />
-            </div>
+                Calcular Indemnización Final
+              </button>
+            </form>
 
-            <div class="form-group">
-              <label for="mesInicio">Mes de Inicio del Acuerdo:</label>
-              <input type="month" id="mesInicio" required />
-            </div>
-
-            <hr class="form-divider" />
-            <h4>1. Categorías Profesionales y Básico de Partida</h4>
-            <div id="categoriasContainer" class="tramos-container">
-              <!-- Se agregan dinámicamente -->
-            </div>
-            <button
-              id="addCategoriaBtn"
-              type="button"
-              class="btn-secondary btn-full"
-              style="margin-bottom: 15px"
+            <div
+              id="results"
+              class="results-container hidden"
+              style="margin-top: 25px"
             >
-              ➕ Agregar Categoría Profesional
-            </button>
-
-            <hr class="form-divider" />
-            <h4>2. Aumentos Programados (% Mensual)</h4>
-            <div id="tramosContainer" class="tramos-container">
-              <!-- Se agregan dinámicamente -->
-            </div>
-
-            <button
-              id="addTramoBtn"
-              type="button"
-              class="btn-secondary btn-full"
-              style="margin-bottom: 20px"
-            >
-              ➕ Agregar Tramo / Mes
-            </button>
-
-            <button type="submit" class="btn-primary-action">
-              ⚙️ Calcular, Guardar y Enviar a Mail
-            </button>
-          </form>
-
-          <!-- VISTA PREVIA DE LA TABLA Y ACCIONES -->
-          <div id="paritariasResults" class="paritarias-results hidden">
-            <hr class="form-divider" />
-            <h4>Grilla Salarial Proyectada</h4>
-            <div class="table-responsive" style="overflow-x: auto">
-              <table id="escalaTable">
+              <h3>📋 Desglose de la Liquidación</h3>
+              <table id="resultsTable" class="data-table">
                 <thead>
-                  <tr id="escalaTableHead">
-                    <th>Categoría</th>
-                    <th>Base Partida</th>
+                  <tr>
+                    <th>Concepto Rubro</th>
+                    <th>Monto ($ ARS)</th>
                   </tr>
                 </thead>
                 <tbody></tbody>
               </table>
+              <div class="total-box">
+                <span>TOTAL A PERCIBIR:</span>
+                <span id="totalAmount" class="total-price">$0,00</span>
+              </div>
             </div>
+          </div>
+        </section>
 
-            <div class="export-box">
-              <div class="btn-group-export">
-                <button id="downloadDocxBtn" type="button" class="btn-docx">
-                  📄 Descargar Documento Word (.docx)
+        <!-- VISTA 2: GESTIÓN DE PARITARIAS (CAR 5) -->
+        <section id="paritariasView" class="app-view hidden">
+          <div class="card">
+            <h2>📜 Carga y Evolución de Escalas Salariales (CAR 5)</h2>
+            <p class="subtitle">
+              Provincia de Córdoba — Homologaciones Oficiales
+            </p>
+
+            <form id="paritariasForm">
+              <!-- 1. SELECCIONAR ACTIVIDAD -->
+              <div class="form-group">
+                <label for="selectHistorial">📂 Actividad / Convenio:</label>
+                <select
+                  id="selectHistorial"
+                  class="form-control"
+                  style="
+                    width: 100%;
+                    padding: 10px;
+                    border-radius: 8px;
+                    font-weight: bold;
+                    border: 1px solid #10b981;
+                    background-color: #ffffff;
+                  "
+                ></select>
+                <!-- Input oculto para enviar el nombre del convenio al script/Word -->
+                <input type="hidden" id="actividadNombre" />
+                <input type="hidden" id="mesInicio" />
+              </div>
+
+              <!-- 2. SELECCIONAR MES DE HISTORIAL O VIGENTE -->
+              <div class="form-group" style="margin-top: 15px">
+                <label for="selectHistorialPorActividad"
+                  >📅 Período / Mes del Acuerdo:</label
+                >
+                <select
+                  id="selectHistorialPorActividad"
+                  class="form-control"
+                  style="
+                    width: 100%;
+                    padding: 10px;
+                    border-radius: 8px;
+                    border: 1px solid #10b981;
+                    font-weight: bold;
+                    background-color: #f0fdf4;
+                  "
+                >
+                  <option value="vigente">
+                    ✨ Escala Base Vigente (Agosto 2026)
+                  </option>
+                </select>
+              </div>
+
+              <hr class="form-divider" />
+
+              <!-- Categorías Desplegables -->
+              <h4>1. Categoría Profesional (Seleccionar o Editar)</h4>
+              <div class="form-group">
+                <label for="selectCategoriaPrincipal"
+                  >📌 Categorías de la actividad:</label
+                >
+                <select
+                  id="selectCategoriaPrincipal"
+                  class="form-control"
+                  style="
+                    width: 100%;
+                    padding: 10px;
+                    border-radius: 8px;
+                    border: 1px solid #d1d5db;
+                    font-weight: bold;
+                    margin-bottom: 15px;
+                  "
+                >
+                  <option value="">Seleccioná una actividad arriba...</option>
+                </select>
+              </div>
+
+              <div id="categoriasContainer" class="tramos-container"></div>
+
+              <button
+                id="addCategoriaBtn"
+                type="button"
+                class="btn-secondary btn-full"
+                style="margin-bottom: 15px"
+              >
+                ➕ Agregar Otra Categoría Profesional
+              </button>
+
+              <hr class="form-divider" />
+
+              <!-- Aumentos Programados -->
+              <h4>2. Aumentos Programados (% Mensual)</h4>
+              <div id="tramosContainer" class="tramos-container"></div>
+
+              <button
+                id="addTramoBtn"
+                type="button"
+                class="btn-secondary btn-full"
+                style="margin-bottom: 15px"
+              >
+                ➕ Agregar Otro Mes de Aumento
+              </button>
+
+              <button
+                type="submit"
+                class="btn-primary btn-full"
+                style="margin-top: 10px"
+              >
+                💾 Calcular Evolución & Guardar en la Nube
+              </button>
+            </form>
+
+            <div
+              id="paritariasResults"
+              class="results-container hidden"
+              style="margin-top: 25px"
+            >
+              <h3>📊 Escala Salarial Calculada</h3>
+              <div style="overflow-x: auto">
+                <table id="escalaTable" class="data-table">
+                  <thead>
+                    <tr id="escalaTableHead"></tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+
+              <div
+                class="actions-box"
+                style="margin-top: 20px; display: flex; gap: 10px"
+              >
+                <button
+                  id="downloadDocxBtn"
+                  class="btn-success"
+                  style="flex: 1"
+                >
+                  📄 Descargar Reporte (.DOCX)
                 </button>
-                <button id="sendEmailBtn" type="button" class="btn-email">
-                  ✉️ Re-enviar por Correo
+                <button id="sendEmailBtn" class="btn-secondary" style="flex: 1">
+                  ✉️ Enviar por Correo Electrónico
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- PIE DE PÁGINA CENTRADO Y ORDENADO EN LÍNEAS -->
-      <footer class="app-footer">
-        <p>
-          Calculadora realizada por la
-          <strong>Delegación Córdoba Capital</strong>
-        </p>
-        <span class="location-tag">Made in Córdoba Capital</span>
-        <span class="motto-tag">Córdoba no para</span>
-      </footer>
+        </section>
+      </main>
     </div>
 
-    <!-- MODAL DE REPORTE DE USO -->
-    <div id="reportModal" class="modal-overlay hidden">
-      <div class="modal-card">
-        <h3>Estadísticas de Uso Mensual</h3>
-        <ul id="usageList" class="usage-list"></ul>
-        <button id="closeReportBtn" type="button" class="btn-secondary">
-          Cerrar
+    <!-- MODAL ESTADÍSTICAS -->
+    <div id="reportModal" class="activation-overlay hidden">
+      <div class="activation-card">
+        <h2>📊 Estadísticas de Uso Mensual</h2>
+        <p>Cantidad de consultas e informes procesados por mes:</p>
+
+        <ul
+          id="usageList"
+          style="
+            text-align: left;
+            margin: 20px 0;
+            line-height: 1.8;
+            max-height: 200px;
+            overflow-y: auto;
+          "
+        >
+          <li>Cargando datos...</li>
+        </ul>
+
+        <button id="closeReportBtn" class="btn-primary btn-full">
+          Cerrar Reporte
         </button>
       </div>
     </div>

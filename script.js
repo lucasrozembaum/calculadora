@@ -1,14 +1,16 @@
 /**
  * Calculadora Rural & Gestión Paritaria Multi-Categoría
  * Delegación Córdoba Capital — CAR 5
+ * Escalas Oficiales Homologadas - VIGENCIA JULIO 2026
  */
 
-// --- CONFIGURACIÓN DE ACCESO Y MAIL ---
+// ============================================================================
+// === 1. CONFIGURACIÓN GENERAL Y FIREBASE ===
+// ============================================================================
 const USER_PIN = "delegacioncordoba";
 const ADMIN_PIN = "admincordoba";
 const DESTINATARIO_MAIL = "lucasrozembaum@gmail.com";
 
-// --- CONFIGURACIÓN DE FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyAYmr5gh35AP2aBAmG7nUG19Sv4p34Zlzk",
   authDomain: "firestore-database-5f05d.firebaseapp.com",
@@ -18,200 +20,526 @@ const firebaseConfig = {
   appId: "1:367295191590:web:1e0eb7e3b827e85c13b3ec",
 };
 
-// Inicializar Firebase
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
+let db = null;
+try {
+  if (typeof firebase !== "undefined") {
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    db = firebase.firestore();
+  }
+} catch (e) {
+  console.warn("Firebase funcionando en modo offline local.", e);
+}
 
 let currentUserRole = null;
 let logoClicks = 0;
 let logoClickTimer = null;
 let ultimaGrillaCalculada = [];
 let ultimosTramos = [];
+let categoriasActividadActual = [];
 
-// ACTIVIDADES PRECARGADAS EN PESOS ARGENTINOS ($ ARS)
+// ============================================================================
+// === 2. BASE DE DATOS DE ACTIVIDADES Y TAREAS (JULIO 2026) ===
+// ============================================================================
 const ACTIVIDADES_PRECARGADAS = [
-  {
-    nombre: "Desmalezado Manual (Desyuyada)",
-    categorias: [{ nombre: "Jornal Mínimo Garantizado", basico: 98116.62 }],
-  },
   {
     nombre: "Floricultura y Viveros",
     categorias: [
-      { nombre: "Trabajador no calificado", basico: 1056230.17 },
-      { nombre: "Trabajador semi calificado", basico: 1082587.9 },
-      { nombre: "Trabajador calificado", basico: 1122247.43 },
-      { nombre: "Conductor tractorista", basico: 1161765.44 },
-      { nombre: "Chofer", basico: 1174989.42 },
-      { nombre: "Mecánico", basico: 1214647.19 },
-      { nombre: "Puestero o sereno", basico: 1164597.76 },
-      { nombre: "Capataz", basico: 1284621.91 },
-      { nombre: "Encargado", basico: 1355114.98 },
+      {
+        nombre: "Trabajador no calificado",
+        basico: 1206136.54,
+        jornal: 59623.41,
+      },
+      {
+        nombre: "Trabajador semi calificado",
+        basico: 1236235.1,
+        jornal: 63132.47,
+      },
+      { nombre: "Trabajador calificado", basico: 1281523.35, jornal: 63433.45 },
+      { nombre: "Conductor tractorista", basico: 1326649.99, jornal: 65671.8 },
+      { nombre: "Chofer", basico: 1341750.78, jornal: 66344.52 },
+      { nombre: "Mecánico", basico: 1387037.02, jornal: 68586.91 },
+      {
+        nombre: "Puestero o sereno con vivienda",
+        basico: 1329884.29,
+        jornal: 0,
+      },
+      { nombre: "Capataz", basico: 1466942.97, jornal: 0 },
+      { nombre: "Encargado", basico: 1547440.83, jornal: 0 },
+    ],
+  },
+  {
+    nombre: "Desmalezado Manual (Desyuyada)",
+    categorias: [
+      { nombre: "Jornal Mínimo Garantizado", basico: 114842.95, jornal: 0 },
+      { nombre: "Adicional Comida", basico: 19177.28, jornal: 0 },
+    ],
+  },
+  {
+    nombre: "Cosecha de Papa (Todas las tareas)",
+    categorias: [
+      { nombre: "Sueldo Mensual Garantizado", basico: 1015374.15, jornal: 0 },
+      { nombre: "Jornal del Personal de Cosecha", basico: 44674.3, jornal: 0 },
+      {
+        nombre: "Jornal por Hectárea (Temporario)",
+        basico: 50537.4,
+        jornal: 0,
+      },
+      {
+        nombre: "Abridor de surco (Maquinista c/disco o reja por día)",
+        basico: 49836.37,
+        jornal: 0,
+      },
+      { nombre: "Fichero por día", basico: 44674.3, jornal: 0 },
+      { nombre: "Juntando en bolsa (por bolsa)", basico: 535.9, jornal: 0 },
+      { nombre: "Juntando con canasto (por bolsa)", basico: 573.57, jornal: 0 },
+      {
+        nombre: "Juntando en maleta-bolsa (juntar, coser y cargar)",
+        basico: 1094.98,
+        jornal: 0,
+      },
+      {
+        nombre: "Sacar bolsas rastrojo boca abierta a montón en galpón",
+        basico: 535.9,
+        jornal: 0,
+      },
+      {
+        nombre: "Clasificación en montón, embolsado s/costura s/recalcar",
+        basico: 347.62,
+        jornal: 0,
+      },
+      {
+        nombre: "Costurero-Embocador (Boca cerrada)",
+        basico: 150.64,
+        jornal: 0,
+      },
+      {
+        nombre: "Costurero-Embocador (Boca zig-zag / media rejilla)",
+        basico: 173.81,
+        jornal: 0,
+      },
+      {
+        nombre: "Costurero-Embocador (Boca rejilla doble)",
+        basico: 185.39,
+        jornal: 0,
+      },
+      {
+        nombre: "Recalcador (por bolsa y por obrero)",
+        basico: 269.4,
+        jornal: 0,
+      },
+      { nombre: "Carga en chacra con cinta", basico: 269.4, jornal: 0 },
+      { nombre: "Carga en chacra sin cinta", basico: 347.62, jornal: 0 },
+      {
+        nombre: "Adicional Comida cuadrilla cargadora",
+        basico: 8980.05,
+        jornal: 0,
+      },
+      {
+        nombre: "Descarga/carga a pila o vehículo s/cinta",
+        basico: 347.62,
+        jornal: 0,
+      },
+      {
+        nombre: "Descarga/carga c/cinta hasta 12 bolsas altura",
+        basico: 269.4,
+        jornal: 0,
+      },
+      {
+        nombre: "Zarandear, embolsar y coser dejando bolsa parada",
+        basico: 425.83,
+        jornal: 0,
+      },
+      {
+        nombre: "Adicional estibar/acomodar sobre salario cuadrilla",
+        basico: 95.59,
+        jornal: 0,
+      },
+      {
+        nombre: "Carga usando burro/plancha baranda fija c/travesaño",
+        basico: 347.62,
+        jornal: 0,
+      },
+      {
+        nombre: "Recargo carga camión baranda fija excede altura",
+        basico: 95.59,
+        jornal: 0,
+      },
+      {
+        nombre: "Preparación Semillas - Corte a mano (por bolsa)",
+        basico: 1381.77,
+        jornal: 0,
+      },
+      {
+        nombre: "Preparación Semillas - Corte a máquina (por bolsa)",
+        basico: 924.08,
+        jornal: 0,
+      },
+    ],
+  },
+  {
+    nombre: "Arreo de Ganados y Remates en Feria",
+    categorias: [
+      { nombre: "Peón general mensualizado", basico: 977805.71, jornal: 0 },
+      { nombre: "Jornal Mínimo Garantizado", basico: 84974.04, jornal: 0 },
+      {
+        nombre: "Capataz con caballo (>50km c/comida por día)",
+        basico: 116541.44,
+        jornal: 0,
+      },
+      {
+        nombre: "Peón con caballo (>50km c/comida por día)",
+        basico: 91570.24,
+        jornal: 0,
+      },
+      {
+        nombre: "Carrero sin elementos de trabajo (>50km)",
+        basico: 105252.44,
+        jornal: 0,
+      },
+      {
+        nombre: "Carrero c/carro y caballos propios (>50km)",
+        basico: 45442.97,
+        jornal: 0,
+      },
+      {
+        nombre: "Viaje ida/vuelta recibir tropa (por legua / 5km s/comida)",
+        basico: 814.9,
+        jornal: 0,
+      },
+      {
+        nombre: "Adicional cuereado por animal muerto",
+        basico: 17502.83,
+        jornal: 0,
+      },
+      {
+        nombre: "Arreo corta distancia (<50km) Capataz c/elem cada 5km",
+        basico: 17502.83,
+        jornal: 0,
+      },
+      {
+        nombre: "Arreo corta distancia (<50km) Resero c/elem cada 5km",
+        basico: 9134.95,
+        jornal: 0,
+      },
+      { nombre: "Adicional Comida Arreos", basico: 17922.22, jornal: 0 },
+      {
+        nombre: "Remate Feria: Capataz (Por Día)",
+        basico: 153706.67,
+        jornal: 0,
+      },
+      {
+        nombre: "Remate Feria: Capataz (Medio Día)",
+        basico: 92155.2,
+        jornal: 0,
+      },
+      {
+        nombre: "Remate Feria: Clasificador (Por Día)",
+        basico: 115952.79,
+        jornal: 0,
+      },
+      {
+        nombre: "Remate Feria: Clasificador (Medio Día)",
+        basico: 69071.33,
+        jornal: 0,
+      },
+      {
+        nombre: "Remate Feria: Adicional Pistero (Por Día)",
+        basico: 14493.47,
+        jornal: 0,
+      },
+      {
+        nombre: "Remate Feria: Peón caballo propio (Por Día)",
+        basico: 111650.2,
+        jornal: 0,
+      },
+      {
+        nombre: "Remate Feria: Peón caballo patrón (Por Día)",
+        basico: 103175.63,
+        jornal: 0,
+      },
+      {
+        nombre: "Remate Feria: Peón a pie (Por Día)",
+        basico: 67943.58,
+        jornal: 0,
+      },
+      {
+        nombre: "Remate Feria: Peón a pie (Medio Día)",
+        basico: 40563.63,
+        jornal: 0,
+      },
+      {
+        nombre: "Remate Feria: Rondador nocturno c/caballo",
+        basico: 100721.75,
+        jornal: 0,
+      },
+      {
+        nombre: "Remate Feria: Comida asado mañana",
+        basico: 14513.63,
+        jornal: 0,
+      },
+      { nombre: "Remate Feria: Comida almuerzo", basico: 17502.82, jornal: 0 },
+      { nombre: "Recargo trabajo bajo lluvia", basico: 13029.17, jornal: 0 },
+      {
+        nombre: "Recargo trabajo terreno en mal estado",
+        basico: 11645.86,
+        jornal: 0,
+      },
+      { nombre: "Cargar hacienda camión Vacunos", basico: 229.94, jornal: 0 },
+      { nombre: "Cargar hacienda vagón Vacunos", basico: 255.69, jornal: 0 },
+      {
+        nombre: "Locales Exposición: Peón a pie (Por día)",
+        basico: 69991.08,
+        jornal: 0,
+      },
+      {
+        nombre: "Locales Exposición: Sereno (Por día)",
+        basico: 103059.75,
+        jornal: 0,
+      },
+    ],
+  },
+  {
+    nombre: "Lavaderos de Verduras (Sueldos y Rendimiento)",
+    categorias: [
+      { nombre: "Peón general mensual", basico: 1223441.01, jornal: 0 },
+      { nombre: "Jornal diario", basico: 55603.65, jornal: 0 },
+      {
+        nombre: "Conductor tractorista o motoelevador",
+        basico: 1280783.3,
+        jornal: 0,
+      },
+      { nombre: "Encargado", basico: 1511569.6, jornal: 0 },
+      { nombre: "Bolsa de zanahoria común x 18 kg", basico: 564.56, jornal: 0 },
+      { nombre: "Bolsa de zanahoria común x 10 kg", basico: 312.29, jornal: 0 },
+      { nombre: "Bolsa de zanahoria extra x 20 kg", basico: 498.3, jornal: 0 },
+      {
+        nombre: "Bolsa de zanahoria fraccionada x 20 kg",
+        basico: 625.58,
+        jornal: 0,
+      },
+      { nombre: "Bolsa de batata x 19 kg", basico: 500.27, jornal: 0 },
+      { nombre: "Bolsa de papa lavada x 28 kg", basico: 727.28, jornal: 0 },
+      { nombre: "Trasbordo bolsa grande con cinta", basico: 500.27, jornal: 0 },
+      { nombre: "Trasbordo bolsa grande sin cinta", basico: 565.22, jornal: 0 },
+      {
+        nombre: "Carga de camión de cámara o galpón con cinta",
+        basico: 249.97,
+        jornal: 0,
+      },
+      {
+        nombre: "Carga de camión de cámara o galpón sin cinta",
+        basico: 312.29,
+        jornal: 0,
+      },
     ],
   },
   {
     nombre: "Cultivo de Hongos Comestibles",
     categorias: [
-      { nombre: "Trabajador no calificado", basico: 929153.46 },
-      { nombre: "Trabajador semi calificado", basico: 966122.69 },
-      { nombre: "Trabajador calificado", basico: 1030755.48 },
-      { nombre: "Especializado", basico: 1090723.81 },
-      { nombre: "Capataz", basico: 1115006.3 },
-      { nombre: "Encargado", basico: 1126855.46 },
-      { nombre: "Supervisor", basico: 1109977.76 },
+      {
+        nombre: "Trabajador no calificado",
+        basico: 969153.46,
+        jornal: 51054.82,
+      },
+      {
+        nombre: "Trabajador semi calificado",
+        basico: 1028343.9,
+        jornal: 50856.89,
+      },
+      { nombre: "Trabajador calificado", basico: 1075027.72, jornal: 54366.65 },
+      { nombre: "Especializado", basico: 1114121.47, jornal: 53894.63 },
+      { nombre: "Capataz", basico: 1138978.94, jornal: 54219.59 },
+      { nombre: "Encargado", basico: 1175255.59, jornal: 55518.41 },
+      { nombre: "Supervisor", basico: 1157652.97, jornal: 0 },
+      {
+        nombre: "Cosechador no permanente (por kilo)",
+        basico: 522.4,
+        jornal: 0,
+      },
+      {
+        nombre: "Empacador no permanente (por kilo)",
+        basico: 498.92,
+        jornal: 0,
+      },
     ],
   },
   {
     nombre: "Manipulación y Almacenamiento de Granos",
     categorias: [
-      { nombre: "Jornal Mínimo Garantizado", basico: 44545.38 },
+      { nombre: "Jornal Mínimo Garantizado", basico: 44545.38, jornal: 0 },
       {
         nombre: "Descargar a granel / gravitación (por quintal)",
         basico: 29.54,
+        jornal: 0,
       },
-      { nombre: "Descargar a granel paleando (por quintal)", basico: 182.81 },
-      { nombre: "Palear en silos / celdas (por quintal)", basico: 587.14 },
-      { nombre: "Derecho carga/descarga c/cinta (por bolsa)", basico: 296.36 },
-      { nombre: "Derecho carga/descarga s/cinta (por bolsa)", basico: 369.55 },
-      { nombre: "Lauchero (por día)", basico: 73992.03 },
-    ],
-  },
-  {
-    nombre: "Cosecha de Papa",
-    categorias: [
-      { nombre: "Sueldo Mensual Garantizado", basico: 884881.21 },
-      { nombre: "Jornal del Personal de Cosecha", basico: 38932.89 },
-      { nombre: "Abridor de surco (por día)", basico: 43431.55 },
-      { nombre: "Juntando en bolsa (por bolsa)", basico: 467.03 },
-      { nombre: "Juntando en maleta-bolsa", basico: 954.26 },
-      { nombre: "Carga en chacra s/cinta (por bolsa)", basico: 302.94 },
-    ],
-  },
-  {
-    nombre: "Lavaderos de Verduras",
-    categorias: [
-      { nombre: "Peón general", basico: 1071383.93 },
-      { nombre: "Jornal diario", basico: 48692.87 },
-      { nombre: "Conductor tractorista / motoelevador", basico: 1121599.35 },
-      { nombre: "Encargado", basico: 1323702.06 },
-    ],
-  },
-  {
-    nombre: "Arreos y Remates en Ferias",
-    categorias: [
-      { nombre: "Peón general mensualizado", basico: 848043.94 },
-      { nombre: "Capataz con caballo (por día)", basico: 101075.56 },
-      { nombre: "Peón con caballo (por día)", basico: 79418.22 },
+      {
+        nombre: "Descargar a granel paleando (por quintal)",
+        basico: 182.81,
+        jornal: 0,
+      },
+      {
+        nombre: "Palear en silos / celdas (por quintal)",
+        basico: 587.14,
+        jornal: 0,
+      },
+      {
+        nombre: "Derecho carga/descarga c/cinta (por bolsa)",
+        basico: 296.36,
+        jornal: 0,
+      },
+      {
+        nombre: "Derecho carga/descarga s/cinta (por bolsa)",
+        basico: 369.55,
+        jornal: 0,
+      },
+      { nombre: "Lauchero (por día)", basico: 73992.03, jornal: 0 },
     ],
   },
 ];
 
+// ============================================================================
+// === 3. INICIALIZACIÓN Y EVENT LISTENERS ===
+// ============================================================================
 document.addEventListener("DOMContentLoaded", () => {
-  checkActivation();
-  initListeners();
-  setupLogoSecret();
-  pobladorSelectorActividades();
-  solicitarPermisoNotificaciones();
+  fn_verificarActivacionApp();
+  fn_inicializarEventos();
+  fn_configurarTrucoLogo();
+  fn_poblarSelectorActividades();
 });
 
-function initListeners() {
-  document.getElementById("activateBtn").addEventListener("click", validarPin);
+function fn_inicializarEventos() {
+  document
+    .getElementById("activateBtn")
+    .addEventListener("click", fn_validarPinAcceso);
   document
     .getElementById("calcForm")
-    .addEventListener("submit", calcularIndemnizacion);
+    .addEventListener("submit", fn_calcularIndemnizacion);
   document
     .getElementById("addCategoriaBtn")
-    .addEventListener("click", () => agregarFilaCategoria());
+    .addEventListener("click", () => fn_agregarFilaCategoria());
   document
     .getElementById("addTramoBtn")
-    .addEventListener("click", () => agregarFilaTramo());
+    .addEventListener("click", () => fn_agregarFilaTramo());
   document
     .getElementById("paritariasForm")
-    .addEventListener("submit", guardarYCalcularGrilla);
+    .addEventListener("submit", fn_guardarYCalcularGrilla);
   document
     .getElementById("downloadDocxBtn")
-    .addEventListener("click", generarDocumentoWord);
+    .addEventListener("click", fn_generarDocumentoWord);
   document
     .getElementById("sendEmailBtn")
-    .addEventListener("click", enviarEmailDirecto);
+    .addEventListener("click", fn_enviarEmailDirecto);
   document
     .getElementById("selectHistorial")
-    .addEventListener("change", cargarDatosActividadSeleccionada);
+    .addEventListener("change", fn_cargarDatosActividadSeleccionada);
+
+  const selectHistAct = document.getElementById("selectHistorialPorActividad");
+  if (selectHistAct) {
+    selectHistAct.addEventListener(
+      "change",
+      fn_cargarDocumentoEspecificoHistorial,
+    );
+  }
+
+  const reportBtn = document.getElementById("reportBtn");
+  if (reportBtn) reportBtn.addEventListener("click", fn_mostrarModalUsoMensual);
+
+  const closeReportBtn = document.getElementById("closeReportBtn");
+  if (closeReportBtn)
+    closeReportBtn.addEventListener("click", () => {
+      document.getElementById("reportModal").classList.add("hidden");
+    });
 
   const navCalc = document.getElementById("navCalcBtn");
   const navPari = document.getElementById("navParitariasBtn");
   if (navCalc)
-    navCalc.addEventListener("click", () => switchView("calcView", navCalc));
+    navCalc.addEventListener("click", () =>
+      fn_cambiarVista("calcView", navCalc),
+    );
   if (navPari)
     navPari.addEventListener("click", () =>
-      switchView("paritariasView", navPari),
+      fn_cambiarVista("paritariasView", navPari),
     );
 }
 
-// --- TRUCO TRIPLE CLIC EN LOGO UATRE ---
-function setupLogoSecret() {
-  const logo = document.querySelector(".delegacion-logo");
-  if (!logo) return;
+// ============================================================================
+// === 4. SISTEMA DE AUTENTICACIÓN Y ROLES ===
+// ============================================================================
+function fn_configurarTrucoLogo() {
+  // Escucha los clics en cualquier logo de la app
+  const logos = document.querySelectorAll(".delegacion-logo, .secret-logo");
+  if (!logos.length) return;
 
-  const handleLogoClick = () => {
-    logoClicks++;
-    if (logoClicks === 3) {
-      clearTimeout(logoClickTimer);
-      logoClicks = 0;
-      let pass = prompt("Acceso Administrador (Delegación Córdoba):");
-      if (pass && pass.trim().toLowerCase() === ADMIN_PIN) {
-        currentUserRole = "admin";
-        localStorage.setItem("user_role", "admin");
-        unlockApp();
-        alert("¡Modo Administrador Activado!");
-      } else if (pass !== null) {
-        alert("Contraseña incorrecta.");
+  logos.forEach((logo) => {
+    logo.addEventListener("click", () => {
+      logoClicks++;
+      if (logoClicks === 3) {
+        clearTimeout(logoClickTimer);
+        logoClicks = 0;
+        let pass = prompt("Acceso Administrador Exclusivo (CAR 5):");
+        if (pass && pass.trim().toLowerCase() === ADMIN_PIN) {
+          currentUserRole = "admin";
+          localStorage.setItem("user_role", "admin");
+          fn_desbloquearApp();
+          alert("¡Modo Administrador Activado!");
+        } else if (pass !== null) {
+          alert("Contraseña incorrecta.");
+        }
       }
-    }
-    clearTimeout(logoClickTimer);
-    logoClickTimer = setTimeout(() => {
-      logoClicks = 0;
-    }, 1500);
-  };
-
-  logo.addEventListener("click", handleLogoClick);
+      clearTimeout(logoClickTimer);
+      logoClickTimer = setTimeout(() => {
+        logoClicks = 0;
+      }, 1500);
+    });
+  });
 }
 
-function validarPin() {
+function fn_validarPinAcceso() {
   const pin = document.getElementById("accessPin").value.trim().toLowerCase();
   if (pin === ADMIN_PIN) {
     currentUserRole = "admin";
     localStorage.setItem("user_role", "admin");
-    unlockApp();
+    fn_desbloquearApp();
   } else if (pin === USER_PIN) {
     currentUserRole = "user";
     localStorage.setItem("user_role", "user");
-    unlockApp();
+    fn_desbloquearApp();
   } else {
     document.getElementById("activationError").classList.remove("hidden");
   }
 }
 
-function unlockApp() {
+function fn_desbloquearApp() {
   document.getElementById("activationScreen").classList.add("hidden");
+  document.getElementById("mainApp").classList.remove("hidden");
+
   if (currentUserRole === "admin") {
     const adminNav = document.getElementById("adminNav");
+    const subtituloAdmin = document.getElementById("subtituloAdmin");
+    const reportBtn = document.getElementById("reportBtn");
+
     if (adminNav) {
       adminNav.classList.remove("hidden");
       adminNav.style.display = "flex";
     }
-    cargarHistorialNube();
+    if (subtituloAdmin) subtituloAdmin.classList.remove("hidden");
+    if (reportBtn) reportBtn.classList.remove("hidden");
+
+    fn_cargarHistorialNube();
   }
 }
 
-function checkActivation() {
+function fn_verificarActivacionApp() {
   const role = localStorage.getItem("user_role");
   if (role) {
     currentUserRole = role;
-    unlockApp();
+    fn_desbloquearApp();
   }
 }
 
-function switchView(viewId, btnActive) {
+function fn_cambiarVista(viewId, btnActive) {
   document
     .querySelectorAll(".app-view")
     .forEach((v) => v.classList.add("hidden"));
@@ -224,12 +552,126 @@ function switchView(viewId, btnActive) {
   if (btnActive) btnActive.classList.add("active");
 }
 
-// --- POBLAR SELECTOR BASE ---
-function pobladorSelectorActividades() {
+// ============================================================================
+// === 5. ESTADÍSTICAS DE USO MENSUAL ===
+// ============================================================================
+function fn_obtenerMesCalendarioVigente() {
+  const meses = [
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+  ];
+  const hoy = new Date();
+  return `${meses[hoy.getMonth()]} ${hoy.getFullYear()}`;
+}
+
+async function fn_registrarUsoCalculadora(tipo = "Liquidación") {
+  const hoy = new Date();
+  const mesAnioKey = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+
+  let usosLocales = JSON.parse(
+    localStorage.getItem("usos_calculadora") || "{}",
+  );
+  usosLocales[mesAnioKey] = (usosLocales[mesAnioKey] || 0) + 1;
+  localStorage.setItem("usos_calculadora", JSON.stringify(usosLocales));
+
+  if (db) {
+    try {
+      await db.collection("estadisticas_uso").add({
+        tipo: tipo,
+        fecha: hoy.toISOString(),
+        mesAnio: mesAnioKey,
+      });
+    } catch (e) {
+      console.warn("Registro guardado en local:", e);
+    }
+  }
+}
+
+async function fn_mostrarModalUsoMensual() {
+  const modal = document.getElementById("reportModal");
+  const usageList = document.getElementById("usageList");
+
+  if (!modal || !usageList) return;
+
+  usageList.innerHTML = "<li>Cargando estadísticas...</li>";
+  modal.classList.remove("hidden");
+
+  let conteoMeses = {};
+
+  let usosLocales = JSON.parse(
+    localStorage.getItem("usos_calculadora") || "{}",
+  );
+  Object.keys(usosLocales).forEach((m) => {
+    conteoMeses[m] = usosLocales[m];
+  });
+
+  if (db) {
+    try {
+      const snapshot = await db.collection("estadisticas_uso").get();
+      if (!snapshot.empty) {
+        let conteoNube = {};
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          if (data.mesAnio) {
+            conteoNube[data.mesAnio] = (conteoNube[data.mesAnio] || 0) + 1;
+          }
+        });
+        Object.keys(conteoNube).forEach((m) => {
+          conteoMeses[m] = Math.max(conteoMeses[m] || 0, conteoNube[m]);
+        });
+      }
+    } catch (e) {
+      console.warn("Usando estadísticas locales:", e);
+    }
+  }
+
+  let html = "";
+  const mesesOrdenados = Object.keys(conteoMeses).sort().reverse();
+  const mesesNombres = [
+    "Enero",
+    "Febrero",
+    "Marzo",
+    "Abril",
+    "Mayo",
+    "Junio",
+    "Julio",
+    "Agosto",
+    "Septiembre",
+    "Octubre",
+    "Noviembre",
+    "Diciembre",
+  ];
+
+  if (mesesOrdenados.length === 0) {
+    html = "<li>No hay cálculos registrados aún este mes.</li>";
+  } else {
+    mesesOrdenados.forEach((m) => {
+      const [anio, mes] = m.split("-");
+      const nombreMes = mesesNombres[parseInt(mes) - 1];
+      html += `<li><strong>${nombreMes} ${anio}:</strong> ${conteoMeses[m]} cálculo(s) realizados</li>`;
+    });
+  }
+
+  usageList.innerHTML = html;
+}
+// ============================================================================
+// === 6. SELECTORES Y HISTORIAL POR ACTIVIDAD ===
+// ============================================================================
+function fn_poblarSelectorActividades() {
   const select = document.getElementById("selectHistorial");
   if (!select) return;
   select.innerHTML =
-    '<option value="nueva">➕ Crear Nueva Actividad / Acuerdo...</option>';
+    '<option value="">-- Seleccionar Actividad / Convenio --</option>';
 
   ACTIVIDADES_PRECARGADAS.forEach((act, idx) => {
     const opt = document.createElement("option");
@@ -239,81 +681,187 @@ function pobladorSelectorActividades() {
   });
 }
 
-function cargarDatosActividadSeleccionada() {
+function fn_poblarDesplegableCategorias(categorias) {
+  const selectCat = document.getElementById("selectCategoriaPrincipal");
+  const container = document.getElementById("categoriasContainer");
+
+  if (!selectCat || !container) return;
+  selectCat.innerHTML = "";
+  container.innerHTML = "";
+  categoriasActividadActual = categorias || [];
+
+  if (!categorias || categorias.length === 0) {
+    selectCat.innerHTML =
+      '<option value="">Sin categorías disponibles</option>';
+    return;
+  }
+
+  categorias.forEach((cat, idx) => {
+    const opt = document.createElement("option");
+    opt.value = idx;
+    const txtJornal =
+      cat.jornal && cat.jornal > 0
+        ? ` | Por día: $${cat.jornal.toLocaleString("es-AR", { minimumFractionDigits: 2 })}`
+        : "";
+    opt.text = `${cat.nombre} — Por mes: $${cat.basico.toLocaleString("es-AR", { minimumFractionDigits: 2 })}${txtJornal}`;
+    selectCat.add(opt);
+  });
+
+  fn_agregarFilaCategoria(
+    categorias[0].nombre,
+    categorias[0].basico,
+    categorias[0].jornal || 0,
+  );
+
+  selectCat.onchange = (e) => {
+    const selectedIdx = e.target.value;
+    container.innerHTML = "";
+    if (selectedIdx !== "") {
+      const cat = categorias[selectedIdx];
+      fn_agregarFilaCategoria(cat.nombre, cat.basico, cat.jornal || 0);
+    }
+  };
+}
+
+// Carga la actividad seleccionada y busca TODOS los acuerdos históricos en Firebase
+async function fn_cargarDatosActividadSeleccionada() {
   const val = document.getElementById("selectHistorial").value;
-  const containerCat = document.getElementById("categoriasContainer");
   const containerTram = document.getElementById("tramosContainer");
-  containerCat.innerHTML = "";
+  const selectHistAct = document.getElementById("selectHistorialPorActividad");
+
   containerTram.innerHTML = "";
+  if (!val) return;
 
   if (val.startsWith("pre_")) {
     const idx = parseInt(val.replace("pre_", ""));
     const act = ACTIVIDADES_PRECARGADAS[idx];
+
     document.getElementById("actividadNombre").value = act.nombre;
-    document.getElementById("mesInicio").value = "";
+    const hoy = new Date();
+    const mesIso = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+    document.getElementById("mesInicio").value = mesIso;
 
-    act.categorias.forEach((cat) => {
-      agregarFilaCategoria(cat.nombre, cat.basico);
-    });
-    agregarFilaTramo();
+    fn_poblarDesplegableCategorias(act.categorias);
+    fn_agregarFilaTramo(0, `Vigente ${fn_obtenerMesCalendarioVigente()}`);
     document.getElementById("paritariasResults").classList.add("hidden");
-  } else if (val === "nueva") {
-    document.getElementById("actividadNombre").value = "";
-    document.getElementById("mesInicio").value = "";
-    agregarFilaCategoria();
-    agregarFilaTramo();
-    document.getElementById("paritariasResults").classList.add("hidden");
-  } else {
-    // CARGAR DESDE LA NUBE
-    db.collection("paritarias")
-      .doc(val)
-      .get()
-      .then((doc) => {
-        if (doc.exists) {
-          const data = doc.data();
-          document.getElementById("actividadNombre").value =
-            data.actividad || "";
-          document.getElementById("mesInicio").value = data.mesInicio || "";
 
-          if (data.categoriasBase) {
-            data.categoriasBase.forEach((cat) =>
-              agregarFilaCategoria(cat.nombre, cat.basico),
-            );
-          }
-          if (data.tramos) {
-            data.tramos.forEach((t) =>
-              agregarFilaTramo(t.porcentaje, t.detalle),
-            );
-          }
+    if (selectHistAct) {
+      selectHistAct.innerHTML = `<option value="vigente">✨ Escala Base Vigente (${fn_obtenerMesCalendarioVigente()})</option>`;
+    }
 
-          if (data.grillaCalculada && data.tramos) {
-            ultimaGrillaCalculada = data.grillaCalculada;
-            ultimosTramos = data.tramos;
-            renderTablaGrilla(data.grillaCalculada, data.tramos);
-          }
+    // BUSCA TODOS LOS REGISTROS EN FIREBASE SIN IMPORTAR LA FECHA EXACTA
+    if (db) {
+      try {
+        const snapshot = await db.collection("paritarias").get();
+
+        if (selectHistAct && !snapshot.empty) {
+          let docsEncontrados = [];
+
+          // Toma la primera palabra clave para machear (ej: "floricultura", "desmalezado", "papa", "arreo", "lavaderos")
+          const palabraClave = act.nombre.toLowerCase().split(" ")[0];
+
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            if (data.actividad) {
+              const actDb = data.actividad.toLowerCase();
+              if (
+                actDb.includes(palabraClave) ||
+                act.nombre.toLowerCase().includes(actDb.split(" ")[0])
+              ) {
+                docsEncontrados.push({ id: doc.id, ...data });
+              }
+            }
+          });
+
+          // Ordena del más reciente al más antiguo
+          docsEncontrados.sort(
+            (a, b) =>
+              new Date(b.fechaGuardado || b.mesInicio) -
+              new Date(a.fechaGuardado || a.mesInicio),
+          );
+
+          // Carga cada opción histórica en el segundo desplegable
+          docsEncontrados.forEach((data) => {
+            const opt = document.createElement("option");
+            opt.value = data.id;
+            const mesTexto = data.mesInicio ? ` — Mes: ${data.mesInicio}` : "";
+            opt.text = `📅 Acuerdo Guardado: ${data.actividad}${mesTexto}`;
+            selectHistAct.add(opt);
+          });
         }
-      })
-      .catch((e) => console.error("Error al cargar período de la nube: ", e));
+      } catch (e) {
+        console.warn("Error buscando historial en la Nube:", e);
+      }
+    }
   }
 }
 
-// EDITAR O AGREGAR CATEGORÍAS
-function agregarFilaCategoria(nombre = "", basico = "") {
+async function fn_cargarDocumentoEspecificoHistorial() {
+  const docId = document.getElementById("selectHistorialPorActividad").value;
+  const containerTram = document.getElementById("tramosContainer");
+
+  if (docId === "vigente") {
+    fn_cargarDatosActividadSeleccionada();
+    return;
+  }
+
+  if (db) {
+    try {
+      const doc = await db.collection("paritarias").doc(docId).get();
+      if (doc.exists) {
+        const data = doc.data();
+        document.getElementById("actividadNombre").value = data.actividad || "";
+        document.getElementById("mesInicio").value = data.mesInicio || "";
+
+        if (data.categoriasBase) {
+          fn_poblarDesplegableCategorias(data.categoriasBase);
+        }
+
+        containerTram.innerHTML = "";
+        if (data.tramos && data.tramos.length > 0) {
+          data.tramos.forEach((t) =>
+            fn_agregarFilaTramo(t.porcentaje, t.detalle),
+          );
+        }
+
+        if (data.grillaCalculada && data.tramos) {
+          ultimaGrillaCalculada = data.grillaCalculada;
+          ultimosTramos = data.tramos;
+          fn_renderTablaGrilla(data.grillaCalculada, data.tramos);
+        }
+      }
+    } catch (e) {
+      console.error("Error recuperando acuerdo histórico:", e);
+    }
+  }
+}
+// === FIN: SELECTORES Y HISTORIAL POR ACTIVIDAD ===
+
+// ============================================================================
+// === 7. FILAS Y ELEMENTOS DEL FORMULARIO ===
+// ============================================================================
+function fn_agregarFilaCategoria(nombre = "", basico = "", jornal = 0) {
   const container = document.getElementById("categoriasContainer");
   const div = document.createElement("div");
   div.className = "categoria-row";
   div.style.cssText =
-    "display:flex; gap:10px; margin-bottom:8px; align-items:center;";
+    "display:flex; flex-wrap:wrap; gap:10px; margin-bottom:8px; align-items:center;";
+
+  let htmlJornal =
+    jornal > 0
+      ? `<input type="number" step="0.01" placeholder="Por día ($)" class="cat-jornal" value="${jornal}" style="width:30%">`
+      : `<input type="hidden" class="cat-jornal" value="0">`;
+
   div.innerHTML = `
-    <input type="text" placeholder="Categoría" class="cat-nombre" value="${nombre}" style="width:55%" required> 
-    <input type="number" step="0.01" placeholder="Básico en Pesos ($)" class="cat-basico" value="${basico}" style="width:35%" required>
-    <button type="button" onclick="this.parentElement.remove()" style="width:10%; background:#ef4444; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer;">🗑️</button>
+    <input type="text" placeholder="Categoría / Tarea" class="cat-nombre" value="${nombre}" style="width:50%" required> 
+    <input type="number" step="0.01" placeholder="Por mes ($)" class="cat-basico" value="${basico}" style="width:35%" required>
+    ${htmlJornal}
+    <button type="button" onclick="this.parentElement.remove()" style="width:8%; background:#ef4444; color:white; border:none; padding:8px; border-radius:6px; cursor:pointer;">🗑️</button>
   `;
   container.appendChild(div);
 }
 
-// EDITAR, ELIMINAR O CONGELAR MESES DE AUMENTO
-function agregarFilaTramo(pct = "", det = "") {
+function fn_agregarFilaTramo(pct = "", det = "") {
   const container = document.getElementById("tramosContainer");
   const div = document.createElement("div");
   div.className = "tramo-row";
@@ -327,104 +875,47 @@ function agregarFilaTramo(pct = "", det = "") {
   container.appendChild(div);
 }
 
-// CARGAR HISTORIAL DE LA NUBE (NOMBRES LIMPIOS SIN REPETICIONES)
-async function cargarHistorialNube() {
-  try {
-    const select = document.getElementById("selectHistorial");
-    if (!select) return;
-
-    pobladorSelectorActividades();
-
-    const snapshot = await db
-      .collection("paritarias")
-      .orderBy("fechaGuardado", "desc")
-      .get();
-
-    const nombresRegistrados = new Set();
-    Array.from(select.options).forEach((opt) =>
-      nombresRegistrados.add(opt.text.trim().toLowerCase()),
-    );
-
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      if (!data.actividad) return;
-
-      let nombreLimpio = data.actividad
-        .replace(/\[Nube\]/gi, "")
-        .replace(/\(Res\..*?\)/gi, "")
-        .replace(/\(\d{4}-.*?\)/gi, "")
-        .replace(/- Desyuyada/gi, "")
-        .trim();
-
-      if (nombreLimpio.endsWith("-"))
-        nombreLimpio = nombreLimpio.slice(0, -1).trim();
-
-      if (!nombresRegistrados.has(nombreLimpio.toLowerCase())) {
-        nombresRegistrados.add(nombreLimpio.toLowerCase());
-
-        const option = document.createElement("option");
-        option.value = doc.id;
-        option.text = nombreLimpio;
-        select.add(option);
-      }
-
-      verificarVencimientoSilencioso(data);
-    });
-  } catch (e) {
-    console.error("Error al obtener historial de la nube: ", e);
-  }
+async function fn_cargarHistorialNube() {
+  fn_poblarSelectorActividades();
 }
 
-function solicitarPermisoNotificaciones() {
-  if ("Notification" in window && Notification.permission !== "granted") {
-    Notification.requestPermission();
-  }
-}
-
-function verificarVencimientoSilencioso(data) {
-  if (!data.mesInicio || !data.tramos || data.tramos.length === 0) return;
-
-  const [anio, mes] = data.mesInicio.split("-").map(Number);
-  const fechaFin = new Date(anio, mes - 1 + data.tramos.length, 1);
-  const fechaHoy = new Date();
-
-  const diffTiempo = fechaFin - fechaHoy;
-  const diffDias = Math.ceil(diffTiempo / (1000 * 60 * 60 * 24));
-
-  if (diffDias <= 30 && diffDias >= -5) {
-    dispararNotificacionPWA(
-      `Alerta Paritaria: ${data.actividad}`,
-      `Quedan ${diffDias} días para el vencimiento del último aumento programado.`,
-    );
-  }
-}
-
-function dispararNotificacionPWA(titulo, mensaje) {
-  if ("Notification" in window && Notification.permission === "granted") {
-    new Notification(titulo, {
-      body: mensaje,
-      icon: "logo.png",
-    });
-  }
-}
-
-// CÁLCULO, RE-GUARDADO EN NUBE, WORD Y MAIL
-async function guardarYCalcularGrilla(e) {
+// ============================================================================
+// === 8. CÁLCULO DE PARITARIAS Y RENDER DE TABLA ===
+// ============================================================================
+async function fn_guardarYCalcularGrilla(e) {
   e.preventDefault();
   const actividadNombre = document.getElementById("actividadNombre").value;
   const mesInicio = document.getElementById("mesInicio").value;
 
+  let categoriasBase =
+    categoriasActividadActual.length > 0 ? categoriasActividadActual : [];
+
   const catNombres = document.querySelectorAll(".cat-nombre");
   const catBasicos = document.querySelectorAll(".cat-basico");
-  let categoriasBase = [];
-  catNombres.forEach((input, i) => {
-    if (input.value.trim() !== "") {
-      categoriasBase.push({
-        nombre: input.value.trim(),
-        basico: parseFloat(catBasicos[i].value) || 0,
-      });
-    }
-  });
+  const catJornal = document.querySelectorAll(".cat-jornal");
+
+  if (catNombres.length > 0) {
+    catNombres.forEach((input, i) => {
+      if (input.value.trim() !== "") {
+        const idxMatch = categoriasBase.findIndex(
+          (c) => c.nombre === input.value.trim(),
+        );
+        const jVal = catJornal[i] ? parseFloat(catJornal[i].value) || 0 : 0;
+
+        if (idxMatch >= 0) {
+          categoriasBase[idxMatch].basico =
+            parseFloat(catBasicos[i].value) || 0;
+          categoriasBase[idxMatch].jornal = jVal;
+        } else {
+          categoriasBase.push({
+            nombre: input.value.trim(),
+            basico: parseFloat(catBasicos[i].value) || 0,
+            jornal: jVal,
+          });
+        }
+      }
+    });
+  }
 
   const tramoPct = document.querySelectorAll(".tramo-porcentaje");
   const tramoDet = document.querySelectorAll(".tramo-detalle");
@@ -452,6 +943,7 @@ async function guardarYCalcularGrilla(e) {
     });
     grillaCalculada.push({
       categoria: cat.nombre,
+      jornal: cat.jornal || 0,
       valores: evolucion,
     });
   });
@@ -459,36 +951,41 @@ async function guardarYCalcularGrilla(e) {
   ultimaGrillaCalculada = grillaCalculada;
   ultimosTramos = tramos;
 
-  try {
-    await db.collection("paritarias").add({
-      actividad: actividadNombre,
-      mesInicio: mesInicio,
-      categoriasBase: categoriasBase,
-      tramos: tramos,
-      grillaCalculada: grillaCalculada,
-      fechaGuardado: new Date().toISOString(),
-    });
-
-    renderTablaGrilla(grillaCalculada, tramos);
-    alert("¡Escala guardada en la Nube con éxito!");
-
-    generarDocumentoWord();
-
-    setTimeout(() => {
-      enviarEmailDirecto();
-    }, 1000);
-
-    cargarHistorialNube();
-  } catch (err) {
-    alert("Error al guardar en la nube: " + err.message);
+  if (db) {
+    try {
+      await db.collection("paritarias").add({
+        actividad: actividadNombre,
+        mesInicio: mesInicio,
+        categoriasBase: categoriasBase,
+        tramos: tramos,
+        grillaCalculada: grillaCalculada,
+        fechaGuardado: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.warn("No se pudo guardar en la nube:", err);
+    }
   }
+
+  fn_registrarUsoCalculadora("Paritaria / Grilla Salarial");
+  fn_renderTablaGrilla(grillaCalculada, tramos);
+  alert("¡Escala calculada con éxito!");
+
+  fn_generarDocumentoWord();
+
+  setTimeout(() => {
+    fn_enviarEmailDirecto();
+  }, 1000);
 }
 
-function renderTablaGrilla(grilla, tramos) {
+function fn_renderTablaGrilla(grilla, tramos) {
   const theadTr = document.getElementById("escalaTableHead");
   const tbody = document.querySelector("#escalaTable tbody");
 
-  let headHtml = "<th>Categoría Profesional</th><th>Base Inicial ($ ARS)</th>";
+  let hayJornal = grilla.some((r) => r.jornal > 0);
+  let headHtml =
+    "<th>Categoría / Tarea Profesional</th><th>Por mes ($ ARS)</th>";
+  if (hayJornal) headHtml += "<th>Por día ($)</th>";
+
   tramos.forEach((t) => {
     headHtml += `<th>${t.detalle} (+${t.porcentaje}%)</th>`;
   });
@@ -497,9 +994,19 @@ function renderTablaGrilla(grilla, tramos) {
   let bodyHtml = "";
   grilla.forEach((row) => {
     bodyHtml += `<tr><td><strong>${row.categoria}</strong></td>`;
-    row.valores.forEach((val) => {
-      bodyHtml += `<td>$${val.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>`;
-    });
+    bodyHtml += `<td>$${row.valores[0].toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>`;
+
+    if (hayJornal) {
+      let valJornal =
+        row.jornal > 0
+          ? `$${row.jornal.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : "-";
+      bodyHtml += `<td>${valJornal}</td>`;
+    }
+
+    for (let i = 1; i < row.valores.length; i++) {
+      bodyHtml += `<td>$${row.valores[i].toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>`;
+    }
     bodyHtml += "</tr>";
   });
 
@@ -507,18 +1014,21 @@ function renderTablaGrilla(grilla, tramos) {
   document.getElementById("paritariasResults").classList.remove("hidden");
 }
 
-function enviarEmailDirecto() {
+// ============================================================================
+// === 9. REPORTE EN WORD Y CORREO ===
+// ============================================================================
+function fn_enviarEmailDirecto() {
   const actividad =
     document.getElementById("actividadNombre").value || "Actividad Rural";
   const mesInicio = document.getElementById("mesInicio").value || "S/D";
 
-  let cuerpo = `Estimado,\n\nSe adjunta la escala salarial en documento Word (.docx) para la actividad: ${actividad}.\nMes de Inicio: ${mesInicio}\n\nSaludos cordiales,\nDelegación Córdoba Capital - UATRE`;
+  let cuerpo = `Estimado,\n\nSe adjunta la escala salarial completa en documento Word (.docx) para la actividad: ${actividad}.\nMes de Inicio: ${mesInicio}\n\nSaludos cordiales,`;
 
   const mailtoUrl = `mailto:${DESTINATARIO_MAIL}?subject=${encodeURIComponent("Escala Salarial: " + actividad)}&body=${encodeURIComponent(cuerpo)}`;
   window.location.href = mailtoUrl;
 }
 
-function generarDocumentoWord() {
+function fn_generarDocumentoWord() {
   const {
     Document,
     Packer,
@@ -532,12 +1042,14 @@ function generarDocumentoWord() {
   const actividad =
     document.getElementById("actividadNombre").value || "General";
 
+  let hayJornal = ultimaGrillaCalculada.some((r) => r.jornal > 0);
+
   let tableHeaderCells = [
     new TableCell({
       children: [
         new Paragraph({
           children: [
-            new TextRun({ text: "Categoría Profesional", bold: true }),
+            new TextRun({ text: "Categoría / Tarea Profesional", bold: true }),
           ],
         }),
       ],
@@ -545,11 +1057,23 @@ function generarDocumentoWord() {
     new TableCell({
       children: [
         new Paragraph({
-          children: [new TextRun({ text: "Base Inicial ($ ARS)", bold: true })],
+          children: [new TextRun({ text: "Por mes ($ ARS)", bold: true })],
         }),
       ],
     }),
   ];
+
+  if (hayJornal) {
+    tableHeaderCells.push(
+      new TableCell({
+        children: [
+          new Paragraph({
+            children: [new TextRun({ text: "Por día ($)", bold: true })],
+          }),
+        ],
+      }),
+    );
+  }
 
   ultimosTramos.forEach((t) => {
     tableHeaderCells.push(
@@ -573,12 +1097,28 @@ function generarDocumentoWord() {
   ultimaGrillaCalculada.forEach((row) => {
     let rowCells = [
       new TableCell({ children: [new Paragraph(row.categoria)] }),
+      new TableCell({
+        children: [new Paragraph(`$${row.valores[0].toFixed(2)}`)],
+      }),
     ];
-    row.valores.forEach((val) => {
+
+    if (hayJornal) {
       rowCells.push(
-        new TableCell({ children: [new Paragraph(`$${val.toFixed(2)}`)] }),
+        new TableCell({
+          children: [
+            new Paragraph(row.jornal > 0 ? `$${row.jornal.toFixed(2)}` : "-"),
+          ],
+        }),
       );
-    });
+    }
+
+    for (let i = 1; i < row.valores.length; i++) {
+      rowCells.push(
+        new TableCell({
+          children: [new Paragraph(`$${row.valores[i].toFixed(2)}`)],
+        }),
+      );
+    }
     tableRows.push(new TableRow({ children: rowCells }));
   });
 
@@ -589,7 +1129,7 @@ function generarDocumentoWord() {
           new Paragraph({
             children: [
               new TextRun({
-                text: "DELEGACIÓN CÓRDOBA CAPITAL - UATRE",
+                text: "UATRE — DELEGACIÓN REGIONAL",
                 bold: true,
                 size: 28,
                 color: "10B981",
@@ -602,6 +1142,15 @@ function generarDocumentoWord() {
                 text: "Reporte de Escala Salarial Paritaria: " + actividad,
                 bold: true,
                 size: 22,
+              }),
+            ],
+          }),
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: "Valores Oficiales Vigentes",
+                italic: true,
+                size: 18,
               }),
             ],
           }),
@@ -618,8 +1167,10 @@ function generarDocumentoWord() {
   Packer.toBlob(doc).then((blob) => saveAs(blob, `Escala_${actividad}.docx`));
 }
 
-// --- CALCULADORA DE INDEMNIZACIONES ORIGINAL COMPLETA ---
-function calcularIndemnizacion(e) {
+// ============================================================================
+// === 10. CALCULADORA DE INDEMNIZACIONES ===
+// ============================================================================
+function fn_calcularIndemnizacion(e) {
   e.preventDefault();
   const salary = parseFloat(document.getElementById("salary").value) || 0;
   const startDateInput = document.getElementById("startDate").value;
@@ -707,6 +1258,8 @@ function calcularIndemnizacion(e) {
     sacSobreVacProporcionales +
     vacNoGozadas2025 +
     sacSobreVacNoGozadas;
+
+  fn_registrarUsoCalculadora("Liquidación / Indemnización");
 
   const tbody = document.querySelector("#resultsTable tbody");
   tbody.innerHTML = `
