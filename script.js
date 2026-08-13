@@ -1282,3 +1282,10 @@ function fn_calcularIndemnizacion(e) {
   );
   document.getElementById("results").classList.remove("hidden");
 }
+
+// REGISTRO DEL SERVICE WORKER PARA PWA / APK
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker
+    .register("sw.js")
+    .catch((err) => console.warn("SW error:", err));
+}
