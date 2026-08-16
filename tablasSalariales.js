@@ -1,18 +1,16 @@
-// =======================================================
-// NAVEGACIÓN ENTRE VISTAS CON CONTROL DE ROL
-// =======================================================
+// ==========================================================================
+// MÓDULO: TABLAS SALARIALES UATRE — GESTIÓN POR FRAGMENTOS (SIN CORS)
+// ==========================================================================
 
 function mostrarVistaTablas() {
   document.getElementById("calcView")?.classList.add("hidden");
   document.getElementById("paritariasView")?.classList.add("hidden");
   document.getElementById("tablasView")?.classList.remove("hidden");
 
-  // Verifica si el usuario inició sesión como Administrador
   const navAdmin = document.getElementById("adminNav");
   const panelAdmin = document.getElementById("panelAdminSubida");
 
   if (panelAdmin) {
-    // Si la barra de admin no está oculta, muestra el panel de subida
     if (navAdmin && !navAdmin.classList.contains("hidden")) {
       panelAdmin.classList.remove("hidden");
     } else {
@@ -27,15 +25,14 @@ function mostrarVistaCalculadora() {
   document.getElementById("calcView")?.classList.remove("hidden");
 }
 
-// =======================================================
-// ADMINISTRADOR: SUBIR PDF A LA NUBE (FIRESTORE)
-// =======================================================
-
+// SUBIDA POR FRAGMENTOS (CHUNKS) A FIRESTORE
 async function subirTablaPdf() {
   const select = document.getElementById("selectActividadSubir");
   const inputFile = document.getElementById("inputPdfTabla");
   const msg = document.getElementById("msgSubida");
   const btn = document.getElementById("btnSubirPdf");
+
+  if (!select || !inputFile || !msg || !btn) return;
 
   const actividadId = select.value;
   const archivo = inputFile.files[0];
@@ -50,78 +47,106 @@ async function subirTablaPdf() {
     return;
   }
 
-  // Límite ampliado a 25 MB para resoluciones completas
-  const limiteEnBytes = 25 * 1024 * 1024; // 26.214.400 bytes (25 MB)
-  if (archivo.size > limiteEnBytes) {
-    alert("El archivo supera el tamaño máximo permitido de 25 MB.");
-    return;
-  }
-
   btn.disabled = true;
-  btn.innerText = "⏳ Subiendo...";
+  btn.innerText = "⏳ Procesando archivo...";
   msg.style.display = "block";
   msg.style.color = "#0284c7";
-  msg.innerText = "Subiendo archivo a la nube...";
+  msg.innerText = "Leyendo archivo PDF...";
 
-  try {
-    // 1. Convertir PDF a Base64
-    const reader = new FileReader();
-    reader.readAsDataURL(archivo);
+  const reader = new FileReader();
+  reader.readAsDataURL(archivo);
 
-    reader.onload = async function () {
+  reader.onload = async function () {
+    try {
       const base64Data = reader.result;
-
-      // 2. Guardar en Firestore en la colección 'tablas_salariales_pdf'
+      const CHUNK_SIZE = 700000; // ~700 KB por fragmento (dentro del límite de 1 MB)
+      const totalChunks = Math.ceil(base64Data.length / CHUNK_SIZE);
       const db = firebase.firestore();
-      await db.collection("tablas_salariales_pdf").doc(actividadId).set({
+
+      msg.innerText = `Subiendo 0 de ${totalChunks} partes...`;
+
+      // 1. Guardar documento principal con metadatos
+      const docRef = db.collection("tablas_salariales_pdf").doc(actividadId);
+      await docRef.set({
         nombreArchivo: archivo.name,
-        contenidoPdf: base64Data,
+        totalChunks: totalChunks,
         fechaActualizacion: new Date().toISOString(),
       });
+
+      // 2. Subir cada fragmento a la subcolección
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(start + CHUNK_SIZE, base64Data.length);
+        const chunk = base64Data.substring(start, end);
+
+        btn.innerText = `⏳ Subiendo (${Math.round(((i + 1) / totalChunks) * 100)}%)...`;
+        msg.innerText = `Subiendo parte ${i + 1} de ${totalChunks}...`;
+
+        await docRef.collection("partes").doc(`parte_${i}`).set({
+          orden: i,
+          data: chunk,
+        });
+      }
 
       btn.disabled = false;
       btn.innerText = "☁️ Subir y Actualizar";
       msg.style.color = "#059669";
-      msg.innerText = `✅ ¡Tabla de ${select.options[select.selectedIndex].text} actualizada con éxito!`;
+      msg.innerText = `✅ ¡Tabla de ${select.options[select.selectedIndex].text} guardada con éxito!`;
       inputFile.value = "";
-    };
+    } catch (err) {
+      console.error("Error al fragmentar y guardar:", err);
+      btn.disabled = false;
+      btn.innerText = "☁️ Subir y Actualizar";
+      msg.style.color = "#dc2626";
+      msg.innerText = "❌ Error al guardar en la base de datos.";
+    }
+  };
 
-    reader.onerror = function () {
-      throw new Error("Error al leer el archivo local.");
-    };
-  } catch (error) {
-    console.error("Error al subir:", error);
+  reader.onerror = function () {
     btn.disabled = false;
     btn.innerText = "☁️ Subir y Actualizar";
     msg.style.color = "#dc2626";
-    msg.innerText = "❌ Ocurrió un error al guardar en la nube.";
-  }
+    msg.innerText = "❌ No se pudo leer el archivo local.";
+  };
 }
 
-// =======================================================
-// USUARIO / ADMIN: DESCARGAR O VER EL PDF ACTUALIZADO
-// =======================================================
-
+// DESCARGA Y ENSAMBLAJE DE FRAGMENTOS
 async function descargarTabla(tipoActividad) {
   try {
     const db = firebase.firestore();
-    const docRef = await db
-      .collection("tablas_salariales_pdf")
-      .doc(tipoActividad)
-      .get();
+    const docRef = db.collection("tablas_salariales_pdf").doc(tipoActividad);
+    const docSnap = await docRef.get();
 
-    if (!docRef.exists || !docRef.data().contenidoPdf) {
+    if (!docSnap.exists) {
       alert(
         "Esta tabla salarial todavía no tiene un PDF cargado. El administrador debe subirla primero.",
       );
       return;
     }
 
-    const data = docRef.data();
-    const base64String = data.contenidoPdf;
+    const info = docSnap.data();
+    let base64Completo = "";
 
-    // Convertir Base64 a Blob y abrir en el navegador
-    const byteCharacters = atob(base64String.split(",")[1]);
+    // Si tiene fragmentos, los descarga y une en orden
+    if (info.totalChunks) {
+      const snapshotPartes = await docRef
+        .collection("partes")
+        .orderBy("orden", "asc")
+        .get();
+      snapshotPartes.forEach((doc) => {
+        base64Completo += doc.data().data;
+      });
+    } else {
+      base64Completo = info.base64 || info.contenidoPdf;
+    }
+
+    if (!base64Completo) {
+      alert("No se encontró el contenido del archivo.");
+      return;
+    }
+
+    // Conversión a Blob y apertura directa
+    const byteCharacters = atob(base64Completo.split(",")[1]);
     const byteNumbers = new Array(byteCharacters.length);
     for (let i = 0; i < byteCharacters.length; i++) {
       byteNumbers[i] = byteCharacters.charCodeAt(i);
@@ -130,18 +155,14 @@ async function descargarTabla(tipoActividad) {
     const blob = new Blob([byteArray], { type: "application/pdf" });
     const fileURL = URL.createObjectURL(blob);
 
-    // Abre el PDF en una pestaña para ver o descargar
     window.open(fileURL, "_blank");
   } catch (error) {
-    console.error("Error al descargar:", error);
-    alert("Hubo un problema al consultar la base de datos.");
+    console.error("Error al reconstruir PDF:", error);
+    alert("Hubo un problema al abrir el archivo.");
   }
 }
 
-// =======================================================
-// EVENT LISTENERS
-// =======================================================
-
+// VINCULACIÓN DE BOTONES
 document.addEventListener("DOMContentLoaded", () => {
   document
     .getElementById("btnAbrirTablas")
