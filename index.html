@@ -11,6 +11,7 @@
     <!-- Carga de Librerías -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
     <script src="https://unpkg.com/docx@7.1.0/build/index.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
   </head>
@@ -38,6 +39,7 @@
             UATRE — Delegación Córdoba Capital
           </h2>
         </div>
+
         <p style="color: #6b7280; font-size: 0.9rem">
           Sistema de Gestión Paritaria y Liquidación Rural
         </p>
@@ -80,7 +82,7 @@
             align-items: center;
           "
         >
-          <!-- LOGO Y TÍTULO AL LADO EN LA MISMA LÍNEA -->
+          <!-- LOGO Y TÍTULO DE LA DELEGACIÓN -->
           <div
             class="header-title"
             style="display: flex; align-items: center; gap: 15px"
@@ -136,8 +138,49 @@
         <!-- VISTA 1: CALCULADORA DE INDEMNIZACIONES -->
         <section id="calcView" class="app-view">
           <div class="card">
-            <h2>🧮 Cálculo de Liquidación Final e Indemnización</h2>
-            <p class="subtitle">Régimen de Trabajo Agrario (Ley N° 26.727)</p>
+            <!-- TÍTULO Y BOTÓN DE TABLAS SALARIALES -->
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
+                gap: 12px;
+              "
+            >
+              <div>
+                <h2 style="margin: 0; font-size: 1.25rem">
+                  🧮 Cálculo de Liquidación Final e Indemnización
+                </h2>
+                <p class="subtitle" style="margin: 4px 0 0 0; color: #555">
+                  Régimen de Trabajo Agrario (Ley N° 26.727)
+                </p>
+              </div>
+
+              <!-- BOTÓN INTERNO: Abre la solapa en la misma pantalla -->
+              <button
+                type="button"
+                id="btnAbrirTablas"
+                style="
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 6px;
+                  background-color: #00989e;
+                  color: #ffffff;
+                  padding: 10px 16px;
+                  font-weight: bold;
+                  font-size: 0.95rem;
+                  border: none;
+                  border-radius: 6px;
+                  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+                  cursor: pointer;
+                  white-space: nowrap;
+                "
+              >
+                📋 Tablas Salariales
+              </button>
+            </div>
 
             <form id="calcForm">
               <div class="form-grid">
@@ -230,6 +273,261 @@
           </div>
         </section>
 
+        <!-- VISTA DE TABLAS SALARIALES (DESCARGAS POR ACTIVIDAD) -->
+        <section id="tablasView" class="app-view hidden">
+          <div class="card">
+            <!-- Encabezado con título y botón volver -->
+            <div
+              style="
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 20px;
+                flex-wrap: wrap;
+                gap: 12px;
+              "
+            >
+              <div>
+                <h2 style="margin: 0; font-size: 1.25rem">
+                  📋 Tablas y Escalas Salariales — UATRE
+                </h2>
+                <p class="subtitle" style="margin: 4px 0 0 0; color: #555">
+                  Descarga de resoluciones y escalas salariales homologadas (CAR
+                  N° 5 Córdoba)
+                </p>
+              </div>
+
+              <button
+                type="button"
+                id="btnVolverCalculadora"
+                style="
+                  display: inline-flex;
+                  align-items: center;
+                  gap: 6px;
+                  background-color: #6b7280;
+                  color: #ffffff;
+                  padding: 10px 16px;
+                  font-weight: bold;
+                  font-size: 0.95rem;
+                  border: none;
+                  border-radius: 6px;
+                  cursor: pointer;
+                "
+              >
+                ⬅ Volver a Calculadora
+              </button>
+            </div>
+
+            <!-- PANEL ADMINISTRADOR: SUBIR Y ACTUALIZAR PDFS -->
+            <div
+              id="panelAdminSubida"
+              class="hidden"
+              style="
+                background-color: #f0fdf4;
+                border: 2px dashed #10b981;
+                border-radius: 8px;
+                padding: 15px;
+                margin-bottom: 20px;
+              "
+            >
+              <h3 style="margin: 0 0 10px 0; color: #065f46; font-size: 1rem">
+                ⚙️ Panel de Administración: Actualizar PDF de Tabla Salarial
+              </h3>
+
+              <div
+                style="
+                  display: flex;
+                  flex-wrap: wrap;
+                  gap: 10px;
+                  align-items: center;
+                "
+              >
+                <!-- Selector de actividad -->
+                <select
+                  id="selectActividadSubir"
+                  style="
+                    padding: 8px 12px;
+                    border-radius: 6px;
+                    border: 1px solid #10b981;
+                    font-weight: bold;
+                    flex: 1;
+                    min-width: 220px;
+                  "
+                >
+                  <option value="peon_general">Peón General</option>
+                  <option value="avicola">Avícola</option>
+                  <option value="criadero_cerdos">Criadero de Cerdos</option>
+                  <option value="fitosanitarios">Fitosanitarios</option>
+                  <option value="maquinistas_cosecha">
+                    Maquinistas y Cosecha
+                  </option>
+                  <option value="acopio">Acopio</option>
+                  <option value="vivero_floricultura">
+                    Vivero y Floricultura
+                  </option>
+                  <option value="remates_feria">Remates de Feria</option>
+                  <option value="papa_cosecha">Papa de Cosecha</option>
+                  <option value="hongos_comestibles">Hongos Comestibles</option>
+                  <option value="desyuyada">Desyuyada</option>
+                  <option value="lavadero_verduras">
+                    Lavadero de Verduras
+                  </option>
+                </select>
+
+                <!-- Input para elegir el PDF -->
+                <input
+                  type="file"
+                  id="inputPdfTabla"
+                  accept="application/pdf"
+                  style="flex: 1; min-width: 200px"
+                />
+
+                <!-- Botón de subida -->
+                <button
+                  type="button"
+                  id="btnSubirPdf"
+                  onclick="subirTablaPdf()"
+                  style="
+                    background-color: #10b981;
+                    color: white;
+                    border: none;
+                    padding: 9px 18px;
+                    border-radius: 6px;
+                    font-weight: bold;
+                    cursor: pointer;
+                  "
+                >
+                  ☁️ Subir y Actualizar
+                </button>
+              </div>
+
+              <p
+                id="msgSubida"
+                style="
+                  margin: 8px 0 0 0;
+                  font-size: 0.85rem;
+                  font-weight: bold;
+                  display: none;
+                "
+              ></p>
+            </div>
+
+            <!-- Grilla de Botones de Descarga -->
+            <div
+              style="
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+                gap: 15px;
+                margin-top: 15px;
+              "
+            >
+              <!-- 1. Peón General -->
+              <button
+                class="btn-descarga-tabla"
+                onclick="descargarTabla('peon_general')"
+              >
+                📥 Tabla Salarial Peón General
+              </button>
+
+              <!-- 2. Avícola (Al lado de Peón General) -->
+              <button
+                class="btn-descarga-tabla"
+                onclick="descargarTabla('avicola')"
+              >
+                📥 Tabla Salarial Avícola
+              </button>
+              <!-- 2. Criadero de Cerdos -->
+              <button
+                class="btn-descarga-tabla"
+                onclick="descargarTabla('criadero_cerdos')"
+              >
+                📥 Tabla Salarial Criadero de Cerdos
+              </button>
+
+              <!-- 3. Fitosanitarios -->
+              <button
+                class="btn-descarga-tabla"
+                onclick="descargarTabla('fitosanitarios')"
+              >
+                📥 Tabla Salarial Fitosanitarios
+              </button>
+
+              <!-- 4. Maquinistas y Cosecha -->
+              <button
+                class="btn-descarga-tabla"
+                onclick="descargarTabla('maquinistas_cosecha')"
+              >
+                📥 Tabla Salarial Maquinista y Conductor de Máquinas Agrícolas
+                de Cosecha
+              </button>
+
+              <!-- 5. Acopio -->
+              <button
+                class="btn-descarga-tabla"
+                onclick="descargarTabla('acopio')"
+              >
+                📥 Tabla Salarial Acopio
+              </button>
+
+              <!-- 6. Vivero y Floricultura -->
+              <button
+                class="btn-descarga-tabla"
+                onclick="descargarTabla('vivero_floricultura')"
+              >
+                📥 Tabla Salarial Vivero y Floricultura
+              </button>
+
+              <!-- 7. Remates de Feria -->
+              <button
+                class="btn-descarga-tabla"
+                onclick="descargarTabla('remates_feria')"
+              >
+                📥 Tabla Salarial Remates de Feria
+              </button>
+
+              <!-- 8. Papa de Cosecha -->
+              <button
+                class="btn-descarga-tabla"
+                onclick="descargarTabla('papa_cosecha')"
+              >
+                📥 Tabla Salarial Papa de Cosecha
+              </button>
+
+              <!-- 9. Hongos Comestibles -->
+              <button
+                class="btn-descarga-tabla"
+                onclick="descargarTabla('hongos_comestibles')"
+              >
+                📥 Tabla Salarial Hongos Comestibles
+              </button>
+
+              <!-- 10. Desyuyada -->
+              <button
+                class="btn-descarga-tabla"
+                onclick="descargarTabla('desyuyada')"
+              >
+                📥 Tabla Salarial Desyuyada
+              </button>
+
+              <!-- 11. Lavadero de Verduras -->
+              <button
+                class="btn-descarga-tabla"
+                onclick="descargarTabla('lavadero_verduras')"
+              >
+                📥 Tabla Salarial Lavadero de Verduras
+              </button>
+
+              <!-- 12. Avícola -->
+              <button
+                class="btn-descarga-tabla"
+                onclick="descargarTabla('avicola')"
+              >
+                📥 Tabla Salarial Avícola
+              </button>
+            </div>
+          </div>
+        </section>
+
         <!-- VISTA 2: GESTIÓN DE PARITARIAS (CAR 5) -->
         <section id="paritariasView" class="app-view hidden">
           <div class="card">
@@ -239,7 +537,6 @@
             </p>
 
             <form id="paritariasForm">
-              <!-- 1. SELECCIONAR ACTIVIDAD -->
               <div class="form-group">
                 <label for="selectHistorial">📂 Actividad / Convenio:</label>
                 <select
@@ -254,12 +551,10 @@
                     background-color: #ffffff;
                   "
                 ></select>
-                <!-- Input oculto para enviar el nombre del convenio al script/Word -->
                 <input type="hidden" id="actividadNombre" />
                 <input type="hidden" id="mesInicio" />
               </div>
 
-              <!-- 2. SELECCIONAR MES DE HISTORIAL O VIGENTE -->
               <div class="form-group" style="margin-top: 15px">
                 <label for="selectHistorialPorActividad"
                   >📅 Período / Mes del Acuerdo:</label
@@ -271,20 +566,17 @@
                     width: 100%;
                     padding: 10px;
                     border-radius: 8px;
-                    border: 1px solid #10b981;
                     font-weight: bold;
+                    border: 1px solid #10b981;
                     background-color: #f0fdf4;
                   "
                 >
-                  <option value="vigente">
-                    ✨ Escala Base Vigente (Agosto 2026)
-                  </option>
+                  <option value="vigente">✨ Escala Base Vigente</option>
                 </select>
               </div>
 
               <hr class="form-divider" />
 
-              <!-- Categorías Desplegables -->
               <h4>1. Categoría Profesional (Seleccionar o Editar)</h4>
               <div class="form-group">
                 <label for="selectCategoriaPrincipal"
@@ -319,7 +611,6 @@
 
               <hr class="form-divider" />
 
-              <!-- Aumentos Programados -->
               <h4>2. Aumentos Programados (% Mensual)</h4>
               <div id="tramosContainer" class="tramos-container"></div>
 
@@ -402,6 +693,8 @@
       </div>
     </div>
 
+    <!-- SCRIPTS -->
     <script src="script.js"></script>
+    <script src="tablasSalariales.js"></script>
   </body>
 </html>
